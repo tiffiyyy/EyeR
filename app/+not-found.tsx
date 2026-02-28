@@ -3,6 +3,7 @@ import { StyleSheet } from 'react-native';
 
 import { Text, View } from '@/components/Themed';
 
+// screen that will pop up if non-existent page is somehow accessed 
 export default function NotFoundScreen() {
   return (
     <>
