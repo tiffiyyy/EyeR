@@ -95,7 +95,7 @@ export default function CameraModeScreen() {
 
   return (
     <View style={styles.container}>
-      <CameraView style={StyleSheet.absoluteFill} facing="front" />
+      <CameraView style={StyleSheet.absoluteFill} facing="back" />
       <View style={styles.overlayContainer}>
         {overlayMatches.map((entry) => (
           <View key={entry.id} style={styles.overlayCard}>
