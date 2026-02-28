@@ -7,31 +7,86 @@ import { peopleRepository } from "@/src/data/repositories";
 import { type KnownEmbedding } from "@/src/domain/types";
 import { recognitionPipeline } from "@/src/ml";
 
+import { useTabBarVisibility } from "./TabBarVisibilityContext";
+
 const LOOP_INTERVAL_MS = 1200;
+const SUSTAINED_MS = 500;
+
+type Bounds = { x: number; y: number; width: number; height: number };
 
 type OverlayMatch = {
   id: string;
   name: string;
   relationship: string;
   similarity: number;
+  bounds: Bounds;
 };
+
+type SustainedFace = { faceId: string; bounds: Bounds };
+
+function CornerFrame({
+  left,
+  top,
+  width,
+  height,
+}: {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}) {
+  const stroke = 4;
+  const cornerLen = Math.min(width, height) * 0.28;
+  const baseCorner = {
+    position: "absolute" as const,
+    width: cornerLen,
+    height: cornerLen,
+    borderColor: "#5B8DEF",
+    shadowColor: "#5B8DEF",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.5,
+    shadowRadius: 6,
+    elevation: 4,
+  };
+
+  return (
+    <View style={[styles.cornerFrameWrapper, { left, top, width, height }]} pointerEvents="none">
+      <View style={[baseCorner, { top: 0, left: 0, borderTopWidth: stroke, borderLeftWidth: stroke }]} />
+      <View style={[baseCorner, { top: 0, right: 0, borderTopWidth: stroke, borderRightWidth: stroke }]} />
+      <View style={[baseCorner, { bottom: 0, left: 0, borderBottomWidth: stroke, borderLeftWidth: stroke }]} />
+      <View style={[baseCorner, { bottom: 0, right: 0, borderBottomWidth: stroke, borderRightWidth: stroke }]} />
+    </View>
+  );
+}
 
 export default function CameraModeScreen() {
   const [permission, requestPermission] = useCameraPermissions();
   const [knownEmbeddings, setKnownEmbeddings] = useState<KnownEmbedding[]>([]);
   const [overlayMatches, setOverlayMatches] = useState<OverlayMatch[]>([]);
+  const [sustainedFrames, setSustainedFrames] = useState<SustainedFace[]>([]);
+  const [layoutSize, setLayoutSize] = useState<{ width: number; height: number } | null>(null);
   const [isRunning, setIsRunning] = useState(true);
+  const [showUI, setShowUI] = useState(false);
   const lockRef = useRef(false);
+  const firstSeenAtRef = useRef<Record<string, number>>({});
+  const { setHideTabBar } = useTabBarVisibility();
 
   const refreshKnownEmbeddings = useCallback(async () => {
     const records = await peopleRepository.listKnownEmbeddings();
     setKnownEmbeddings(records);
   }, []);
 
+  useEffect(() => {
+    setHideTabBar(!showUI);
+  }, [showUI, setHideTabBar]);
+
   useFocusEffect(
     useCallback(() => {
       refreshKnownEmbeddings().catch((error) => console.error("Failed to load known embeddings", error));
-    }, [refreshKnownEmbeddings])
+      return () => {
+        setHideTabBar(false);
+      };
+    }, [refreshKnownEmbeddings, setHideTabBar])
   );
 
   useEffect(() => {
@@ -51,15 +106,33 @@ export default function CameraModeScreen() {
           capturedAt: Date.now(),
         };
         const predictions = await recognitionPipeline.run(frame, knownEmbeddings);
-        const visibleMatches = predictions
-          .filter((entry) => !entry.match.isUnknown && entry.match.personId)
-          .map((entry) => ({
-            id: entry.faceId,
-            name: entry.match.personName,
-            relationship: entry.match.relationship ?? "",
-            similarity: entry.match.similarity,
-          }));
+        const now = Date.now();
+        const recognized = predictions.filter(
+          (entry) => !entry.match.isUnknown && entry.match.personId
+        );
+        const visibleMatches = recognized.map((entry) => ({
+          id: entry.faceId,
+          name: entry.match.personName,
+          relationship: entry.match.relationship ?? "",
+          similarity: entry.match.similarity,
+          bounds: entry.bounds,
+        }));
 
+        const ids = new Set(recognized.map((r) => r.faceId));
+        const firstSeenAt = firstSeenAtRef.current;
+        Array.from(ids).forEach((faceId) => {
+          if (firstSeenAt[faceId] == null) firstSeenAt[faceId] = now;
+        });
+        Object.keys(firstSeenAt).forEach((key) => {
+          if (!ids.has(key)) delete firstSeenAt[key];
+        });
+
+        const sustained = recognized.filter(
+          (entry) => now - (firstSeenAt[entry.faceId] ?? now) >= SUSTAINED_MS
+        );
+        setSustainedFrames(
+          sustained.map((entry) => ({ faceId: entry.faceId, bounds: entry.bounds }))
+        );
         setOverlayMatches(visibleMatches);
       } catch (error) {
         console.error("Recognition loop failed", error);
@@ -94,23 +167,65 @@ export default function CameraModeScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} onLayout={(e) => setLayoutSize({ width: e.nativeEvent.layout.width, height: e.nativeEvent.layout.height })}>
       <CameraView style={StyleSheet.absoluteFill} facing="back" />
-      <View style={styles.overlayContainer}>
-        {overlayMatches.map((entry) => (
-          <View key={entry.id} style={styles.overlayCard}>
-            <Text style={styles.overlayName}>{entry.name}</Text>
-            <Text style={styles.overlayMeta}>
-              {entry.relationship} - {Math.round(entry.similarity * 100)}%
-            </Text>
+      {layoutSize &&
+        sustainedFrames.length > 0 && (
+          <View style={StyleSheet.absoluteFill} pointerEvents="none">
+            {sustainedFrames.map(({ faceId, bounds }) => (
+              <CornerFrame
+                key={faceId}
+                left={bounds.x * layoutSize.width}
+                top={bounds.y * layoutSize.height}
+                width={bounds.width * layoutSize.width}
+                height={bounds.height * layoutSize.height}
+              />
+            ))}
           </View>
-        ))}
-      </View>
-      <View style={styles.footer}>
-        <Pressable onPress={() => setIsRunning((value) => !value)} style={styles.primaryButton}>
-          <Text style={styles.primaryButtonText}>{isRunning ? "Pause Recognition" : "Resume Recognition"}</Text>
-        </Pressable>
-      </View>
+        )}
+      {!showUI && (
+        <Pressable
+          style={StyleSheet.absoluteFill}
+          onPress={() => {
+            setShowUI(true);
+            setHideTabBar(false);
+          }}
+        />
+      )}
+      {showUI && (
+        <>
+          <View style={styles.headerBar}>
+            <Text style={styles.headerTitle}>Camera</Text>
+          </View>
+          <View style={styles.overlayContainer}>
+            {overlayMatches.map((entry) => (
+              <View key={entry.id} style={styles.overlayCard}>
+                <Text style={styles.overlayName}>{entry.name}</Text>
+                <Text style={styles.overlayMeta}>
+                  {entry.relationship} - {Math.round(entry.similarity * 100)}%
+                </Text>
+              </View>
+            ))}
+          </View>
+          <Pressable
+            style={styles.emptyAreaTapTarget}
+            onPress={() => {
+              setShowUI(false);
+              setHideTabBar(true);
+            }}
+          />
+          <View style={styles.footer}>
+            <Pressable
+              onPress={() => setIsRunning((value) => !value)}
+              style={styles.primaryButton}
+            >
+              <Text style={styles.primaryButtonText}>
+                {isRunning ? "Pause Recognition" : "Resume Recognition"}
+              </Text>
+            </Pressable>
+          </View>
+        </>
+      )}
     </View>
   );
 }
@@ -119,6 +234,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#000",
+  },
+  cornerFrameWrapper: {
+    position: "absolute",
   },
   centered: {
     flex: 1,
@@ -140,11 +258,33 @@ const styles = StyleSheet.create({
     textAlign: "center",
     lineHeight: 24,
   },
+  headerBar: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    top: 0,
+    paddingTop: 56,
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+  },
+  headerTitle: {
+    color: "#fff",
+    fontSize: 22,
+    fontWeight: "700",
+  },
+  emptyAreaTapTarget: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    top: 180,
+    bottom: 100,
+  },
   overlayContainer: {
     position: "absolute",
     left: 12,
     right: 12,
-    top: 12,
+    top: 120,
     gap: 10,
   },
   overlayCard: {
