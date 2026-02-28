@@ -16,12 +16,14 @@ export default function AddPersonScreen() {
   const [photoUris, setPhotoUris] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
 
+  // variable/function tracking whether requirements are met 
   const canAddMorePhotos = photoUris.length < MAX_PHOTOS;
   const canSave = useMemo(
     () => name.trim().length > 0 && relationship.trim().length > 0 && photoUris.length >= MIN_PHOTOS && !isSaving,
     [isSaving, name, photoUris.length, relationship]
   );
 
+  // function to add uploaded photo to person's portfolio 
   const appendPhoto = (uri: string) => {
     setPhotoUris((current) => {
       if (current.length >= MAX_PHOTOS) {
@@ -31,6 +33,7 @@ export default function AddPersonScreen() {
     });
   };
 
+  // function to select pre-existing photos from user's photo library 
   const pickFromLibrary = async () => {
     if (!canAddMorePhotos) {
       return;
@@ -45,6 +48,7 @@ export default function AddPersonScreen() {
     }
   };
 
+  // function for users to take new photos to upload 
   const captureWithCamera = async () => {
     if (!canAddMorePhotos) {
       return;
@@ -59,6 +63,7 @@ export default function AddPersonScreen() {
     }
   };
 
+  // function to save new person to db; if requirements are not met, do not save 
   const savePerson = async () => {
     if (!canSave) {
       return;
@@ -94,6 +99,7 @@ export default function AddPersonScreen() {
     }
   };
 
+  // tsx code for page layout 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Text style={styles.label}>Name</Text>

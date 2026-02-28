@@ -9,29 +9,34 @@ import { type Person } from "@/src/domain/types";
 export default function PeopleListScreen() {
   const [people, setPeople] = useState<Person[]>([]);
 
+  // we use "useCallback" to ensure that person data remains intact 
   const loadPeople = useCallback(async () => {
     const records = await peopleRepository.list();
     setPeople(records);
   }, []);
 
+  // if person cannot be loaded, throw an error 
   useFocusEffect(
     useCallback(() => {
       loadPeople().catch((error) => console.error("Failed to load people", error));
     }, [loadPeople])
   );
 
+  // tsx code for page layout 
   return (
     <View style={styles.container}>
       <Pressable style={styles.addButton} onPress={() => router.push("/(tabs)/people/add")}>
         <Text style={styles.addButtonText}>Add Person</Text>
       </Pressable>
 
+      {/* flatlist ensures that not all people records will be loaded at once (<- could crash app) */}
       <FlatList
         data={people}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContent}
         ListEmptyComponent={<Text style={styles.emptyText}>No people saved yet.</Text>}
         renderItem={({ item }) => (
+          // loads person's record/data 
           <Pressable style={styles.card} onPress={() => router.push(`/(tabs)/people/${item.id}`)}>
             {item.thumbnailUri ? (
               <Image source={{ uri: item.thumbnailUri }} style={styles.thumbnail} />
