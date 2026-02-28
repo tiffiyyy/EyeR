@@ -4,15 +4,20 @@ import { Tabs } from 'expo-router';
 import Colors from '@/constants/Colors';
 import { useColorScheme } from '@/components/useColorScheme';
 
-export default function TabLayout() {
+import { TabBarVisibilityProvider, useTabBarVisibility } from './TabBarVisibilityContext';
+
+function TabLayoutContent() {
   const colorScheme = useColorScheme();
+  const { hideTabBar } = useTabBarVisibility();
 
   return (
     <Tabs
       screenOptions={{
         tabBarActiveTintColor: Colors[colorScheme].tint,
         tabBarLabelStyle: { fontSize: 14, fontWeight: '700' },
-        tabBarStyle: { height: 64, paddingBottom: 8, paddingTop: 8 },
+        tabBarStyle: hideTabBar
+          ? { display: 'none' }
+          : { height: 64, paddingBottom: 8, paddingTop: 8 },
         headerTitleStyle: { fontSize: 22, fontWeight: '700' },
       }}>
       <Tabs.Screen
@@ -20,6 +25,7 @@ export default function TabLayout() {
         options={{
           title: 'Camera',
           tabBarLabel: 'Camera',
+          headerShown: false,
         }}
       />
       <Tabs.Screen
@@ -38,5 +44,13 @@ export default function TabLayout() {
         }}
       />
     </Tabs>
+  );
+}
+
+export default function TabLayout() {
+  return (
+    <TabBarVisibilityProvider>
+      <TabLayoutContent />
+    </TabBarVisibilityProvider>
   );
 }
