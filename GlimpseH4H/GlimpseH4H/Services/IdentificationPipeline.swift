@@ -40,6 +40,7 @@ final class IdentificationPipeline: ObservableObject {
     private var lastIdentifiedPersonId: UUID?
     private let faceStableDuration: TimeInterval = 2.0
     private let personLeftDuration: TimeInterval = 5.0
+    private let matchThreshold: Float = FaceMatcher.defaultThreshold
     private var dataStore: DataStore?
     private var isRunning = false
     private let queue = DispatchQueue(label: "pipeline.queue")
@@ -50,6 +51,7 @@ final class IdentificationPipeline: ObservableObject {
         self.dataStore = dataStore
         isRunning = true
         faceDetectionRequest = VNDetectFaceRectanglesRequest()
+        _ = try? FaceModelLoader.shared.loadIfNeeded()
     }
 
     func pause() {
@@ -71,12 +73,12 @@ final class IdentificationPipeline: ObservableObject {
             let now = Date()
             let boxes = results.map { FaceOutline(boundingBox: $0.boundingBox) }
             queue.async { [weak self] in
-                self?.handleFaceResults(boxes: boxes, at: now)
+                self?.handleFaceResults(boxes: boxes, at: now, pixelBuffer: pixelBuffer)
             }
         } catch {}
     }
 
-    private func handleFaceResults(boxes: [FaceOutline], at now: Date) {
+    private func handleFaceResults(boxes: [FaceOutline], at now: Date, pixelBuffer: CVPixelBuffer) {
         let hadFace = !boxes.isEmpty
         if hadFace {
             if firstFaceSeenAt == nil { firstFaceSeenAt = now }
@@ -96,20 +98,48 @@ final class IdentificationPipeline: ObservableObject {
             self?.visibleFaceOutlines = boxes
         }
 
-        if hadFace, let first = firstFaceSeenAt, now.timeIntervalSince(first) >= faceStableDuration, lastIdentifiedPersonId == nil {
-            identifyCurrentFaceAndShowCard()
+        if hadFace,
+           let first = firstFaceSeenAt,
+           now.timeIntervalSince(first) >= faceStableDuration,
+           lastIdentifiedPersonId == nil,
+           let primaryFace = boxes.first {
+            identifyCurrentFaceAndShowCard(pixelBuffer: pixelBuffer, face: primaryFace)
         }
     }
 
-    private func identifyCurrentFaceAndShowCard() {
-        guard let dataStore = dataStore, !dataStore.people.isEmpty else { return }
-        let matchId = dataStore.people.first?.id
+    private func identifyCurrentFaceAndShowCard(pixelBuffer: CVPixelBuffer, face: FaceOutline) {
+        guard let dataStore = dataStore else { return }
+        let candidates = dataStore.people.compactMap { person -> (UUID, [Float])? in
+            guard !person.faceEmbedding.isEmpty else { return nil }
+            return (person.id, person.faceEmbedding)
+        }
+        guard !candidates.isEmpty else { return }
+        guard let frameImage = FaceCropper.makeOrientedCGImage(from: pixelBuffer, orientation: .leftMirrored) else { return }
+        guard let faceCrop = FaceCropper.cropFace(from: frameImage, boundingBox: face.boundingBox) else { return }
+
+        let probeEmbedding: [Float]
+        do {
+            probeEmbedding = try FaceEmbedder.shared.embedding(from: faceCrop)
+        } catch {
+            print("Face embedding failed: \(error.localizedDescription)")
+            return
+        }
+
+        let matchId = FaceMatcher.bestMatch(
+            probeEmbedding: probeEmbedding,
+            candidates: candidates,
+            threshold: matchThreshold
+        )
         lastIdentifiedPersonId = matchId
         if let id = matchId {
             DispatchQueue.main.async { [weak self] in
                 self?.currentlyIdentifiedPerson = IdentifiedPerson(personId: id)
             }
             dataStore.updateLastSeen(personId: id, at: Date())
+        } else {
+            DispatchQueue.main.async { [weak self] in
+                self?.currentlyIdentifiedPerson = nil
+            }
         }
     }
 }

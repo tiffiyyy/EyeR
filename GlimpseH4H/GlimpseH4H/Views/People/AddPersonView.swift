@@ -16,6 +16,8 @@ struct AddPersonView: View {
     @State private var capturedImages: [UIImage] = []
     @State private var showCamera = false
     @State private var selectedLibraryItems: [PhotosPickerItem] = []
+    @State private var isSaving = false
+    @State private var saveErrorMessage: String?
     private let minPhotos = 4
     private let maxPhotos = 8
 
@@ -83,9 +85,26 @@ struct AddPersonView: View {
                     Button("Cancel") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(isEditing ? "Save" : "Add") { saveAndDismiss() }
-                        .disabled(!canSave)
+                    Button(isEditing ? "Save" : "Add") {
+                        Task { await saveAndDismiss() }
+                    }
+                    .disabled(!canSave || isSaving)
                 }
+            }
+            .overlay {
+                if isSaving {
+                    ProgressView("Generating face embedding...")
+                        .padding(12)
+                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
+                }
+            }
+            .alert("Could not save person", isPresented: Binding(
+                get: { saveErrorMessage != nil },
+                set: { if !$0 { saveErrorMessage = nil } }
+            )) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(saveErrorMessage ?? "Unknown error")
             }
             .fullScreenCover(isPresented: $showCamera) {
                 ImagePicker(image: Binding(
@@ -102,7 +121,8 @@ struct AddPersonView: View {
                 if let p = existingPerson {
                     name = p.name
                     relationship = p.relationship
-                    capturedImages = p.embeddingData.compactMap { UIImage(data: $0) }
+                    let source = p.enrollmentImageData.isEmpty ? p.embeddingData : p.enrollmentImageData
+                    capturedImages = source.compactMap { UIImage(data: $0) }
                 }
             }
         }
@@ -142,23 +162,35 @@ struct AddPersonView: View {
         await MainActor.run { selectedLibraryItems = [] }
     }
 
-    private func saveAndDismiss() {
-        let data = capturedImages.prefix(maxPhotos).compactMap { $0.jpegData(compressionQuality: 0.8) }
-        if let existing = existingPerson {
-            var updated = existing
-            updated.name = name.trimmingCharacters(in: .whitespaces)
-            updated.relationship = relationship.trimmingCharacters(in: .whitespaces)
-            updated.embeddingData = data
-            dataStore.updatePerson(updated)
-        } else {
-            let person = Person(
-                name: name.trimmingCharacters(in: .whitespaces),
-                relationship: relationship.trimmingCharacters(in: .whitespaces),
-                conversationSummary: "",
-                embeddingData: data
-            )
-            dataStore.addPerson(person)
+    private func saveAndDismiss() async {
+        guard !isSaving else { return }
+        isSaving = true
+        defer { isSaving = false }
+
+        do {
+            let enrollment = try FaceEnrollmentService.shared.enroll(from: Array(capturedImages.prefix(maxPhotos)))
+            if let existing = existingPerson {
+                var updated = existing
+                updated.name = name.trimmingCharacters(in: .whitespaces)
+                updated.relationship = relationship.trimmingCharacters(in: .whitespaces)
+                updated.enrollmentImageData = enrollment.keptImages
+                updated.faceEmbedding = enrollment.embedding
+                updated.embeddingData = []
+                dataStore.updatePerson(updated)
+            } else {
+                let person = Person(
+                    name: name.trimmingCharacters(in: .whitespaces),
+                    relationship: relationship.trimmingCharacters(in: .whitespaces),
+                    conversationSummary: "",
+                    embeddingData: [],
+                    enrollmentImageData: enrollment.keptImages,
+                    faceEmbedding: enrollment.embedding
+                )
+                dataStore.addPerson(person)
+            }
+            dismiss()
+        } catch {
+            saveErrorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
         }
-        dismiss()
     }
 }
