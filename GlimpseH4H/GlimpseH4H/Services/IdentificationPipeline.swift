@@ -41,6 +41,8 @@ final class IdentificationPipeline: ObservableObject {
     @Published private(set) var debugIsComparing: Bool = false
     @Published private(set) var debugLastCosinePercent: Float?
     @Published private(set) var debugLastSecondBestPercent: Float?
+    @Published private(set) var debugBestMatchName: String?
+    @Published private(set) var debugSecondBestMatchName: String?
     @Published private(set) var debugDidMatch: Bool = false
     /// Threshold as percent for display.
     var debugMatchThresholdPercent: Int { Int(matchThreshold * 100) }
@@ -54,9 +56,9 @@ final class IdentificationPipeline: ObservableObject {
     /// How often to re-run recognition for a locked-in person.
     private let recognitionInterval: TimeInterval = 5.0
     /// Minimum similarity score (cosine) for a match to be considered valid.
-    private let matchThreshold: Float = 0.82
+    private let matchThreshold: Float = 0.72
     /// Best match must be at least this much higher than second-best to avoid ambiguous wrong matches.
-    private let matchMargin: Float = 0.06
+    private let matchMargin: Float = 0.03
     private var lastRecognitionTime: Date?
     private var dataStore: DataStore?
     private var isRunning = false
@@ -177,6 +179,8 @@ final class IdentificationPipeline: ObservableObject {
             DispatchQueue.main.async { [weak self] in
                 self?.debugLastCosinePercent = nil
                 self?.debugLastSecondBestPercent = nil
+                self?.debugBestMatchName = nil
+                self?.debugSecondBestMatchName = nil
                 self?.debugDidMatch = false
             }
             if expectedPersonId != nil {
@@ -191,6 +195,7 @@ final class IdentificationPipeline: ObservableObject {
         // Compare against all stored embeddings for all people.
         var bestMatchId: UUID?
         var bestScore: Float = -1
+        var secondBestMatchId: UUID?
         var secondBestScore: Float = -1
 
         for person in dataStore.people {
@@ -199,10 +204,12 @@ final class IdentificationPipeline: ObservableObject {
                 let score = cosineSimilarity(currentEmbedding, embedding)
                 if score > bestScore {
                     secondBestScore = bestScore
+                    secondBestMatchId = bestMatchId
                     bestScore = score
                     bestMatchId = person.id
                 } else if score > secondBestScore {
                     secondBestScore = score
+                    secondBestMatchId = person.id
                 }
             }
         }
@@ -210,10 +217,15 @@ final class IdentificationPipeline: ObservableObject {
         let marginOk = (secondBestScore < 0) || (bestScore - secondBestScore >= matchMargin)
         let bestPct = bestScore >= 0 ? Int(round(bestScore * 100)) : nil
         let secondPct = secondBestScore >= 0 ? Int(round(secondBestScore * 100)) : nil
+        let bestId = bestMatchId
+        let secondId = secondBestMatchId
         DispatchQueue.main.async { [weak self] in
-            self?.debugLastCosinePercent = bestPct.map { Float($0) }
-            self?.debugLastSecondBestPercent = secondPct.map { Float($0) }
-            self?.debugDidMatch = false
+            guard let self else { return }
+            self.debugLastCosinePercent = bestPct.map { Float($0) }
+            self.debugLastSecondBestPercent = secondPct.map { Float($0) }
+            self.debugBestMatchName = bestId.flatMap { id in self.dataStore?.people.first(where: { $0.id == id })?.name }
+            self.debugSecondBestMatchName = secondId.flatMap { id in self.dataStore?.people.first(where: { $0.id == id })?.name }
+            self.debugDidMatch = false
         }
         guard let matchId = bestMatchId, bestScore >= matchThreshold, marginOk else {
             if expectedPersonId != nil {

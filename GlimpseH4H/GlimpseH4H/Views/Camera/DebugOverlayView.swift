@@ -23,14 +23,16 @@ struct DebugOverlayView: View {
             row("Face detected", value: pipeline.debugFaceCount > 0 ? "Yes (\(pipeline.debugFaceCount))" : "No")
             row("Comparing embeddings", value: pipeline.debugIsComparing ? "Yes" : "No")
             if let pct = pipeline.debugLastCosinePercent {
-                row("Cosine similarity (best)", value: "\(Int(pct))%")
+                let name = pipeline.debugBestMatchName ?? "?"
+                row("Best match", value: "\(name) (\(Int(pct))%)")
             } else {
-                row("Cosine similarity (best)", value: "—")
+                row("Best match", value: "—")
             }
             if let pct = pipeline.debugLastSecondBestPercent {
-                row("Cosine similarity (2nd)", value: "\(Int(pct))%")
+                let name = pipeline.debugSecondBestMatchName ?? "?"
+                row("Second match", value: "\(name) (\(Int(pct))%)")
             } else {
-                row("Cosine similarity (2nd)", value: "—")
+                row("Second match", value: "—")
             }
             row("Threshold", value: "\(pipeline.debugMatchThresholdPercent)%")
             row("Match", value: pipeline.debugDidMatch ? "Yes" : "No")
