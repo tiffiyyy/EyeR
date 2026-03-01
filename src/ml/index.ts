@@ -1,10 +1,10 @@
 import { DefaultFaceMatcher } from "@/src/ml/defaultFaceMatcher";
-import { MockFaceDetector } from "@/src/ml/mocks/mockFaceDetector";
-import { MockFaceEmbedder } from "@/src/ml/mocks/mockFaceEmbedder";
+import { ArcFaceEmbedder } from "@/src/ml/models/ArcFaceEmbedder";
+import { RetinaFaceDetector } from "@/src/ml/models/RetinaFaceDetector";
 import { RecognitionPipeline } from "@/src/ml/pipeline/recognitionPipeline";
 
-const detector = new MockFaceDetector();
-export const faceEmbedder = new MockFaceEmbedder();
+const detector = new RetinaFaceDetector();
+export const faceEmbedder = new ArcFaceEmbedder();
 const matcher = new DefaultFaceMatcher();
 
 export const recognitionPipeline = new RecognitionPipeline(detector, faceEmbedder, matcher);

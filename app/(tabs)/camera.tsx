@@ -22,6 +22,7 @@ export default function CameraModeScreen() {
   const [overlayMatches, setOverlayMatches] = useState<OverlayMatch[]>([]);
   const [isRunning, setIsRunning] = useState(true);
   const lockRef = useRef(false);
+  const cameraRef = useRef<CameraView>(null);
 
   const refreshKnownEmbeddings = useCallback(async () => {
     const records = await peopleRepository.listKnownEmbeddings();
@@ -46,8 +47,22 @@ export default function CameraModeScreen() {
       lockRef.current = true;
 
       try {
+        if (!cameraRef.current) {
+          return;
+        }
+
+        const photo = await cameraRef.current.takePictureAsync({
+          base64: false,
+          quality: 0.1,
+          skipProcessing: true,
+        });
+
+        if (!photo || !photo.uri) {
+          return;
+        }
+
         const frame = {
-          token: `frame_${Date.now()}`,
+          token: photo.uri,
           capturedAt: Date.now(),
         };
         const predictions = await recognitionPipeline.run(frame, knownEmbeddings);
@@ -95,7 +110,7 @@ export default function CameraModeScreen() {
 
   return (
     <View style={styles.container}>
-      <CameraView style={StyleSheet.absoluteFill} facing="back" />
+      <CameraView style={StyleSheet.absoluteFill} facing="front" ref={cameraRef} />
       <View style={styles.overlayContainer}>
         {overlayMatches.map((entry) => (
           <View key={entry.id} style={styles.overlayCard}>
