@@ -1,5 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Tabs } from 'expo-router';
+import React from 'react';
 
 import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
@@ -39,7 +40,7 @@ function TabLayoutContent() {
         }}
       />
       <Tabs.Screen
-        name="memories"
+        name="rooms"
         options={{
           title: 'Memories',
           tabBarLabel: 'Memories',
