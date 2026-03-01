@@ -98,6 +98,9 @@ private struct PersonListCard: View {
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                     }
+                    Text("\(person.photoPaths.count) photo\(person.photoPaths.count == 1 ? "" : "s"), \(person.faceEmbedding.isEmpty ? "no" : "\(person.faceEmbedding.count)") face embedding")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
                 }
                 Spacer()
                 Menu {

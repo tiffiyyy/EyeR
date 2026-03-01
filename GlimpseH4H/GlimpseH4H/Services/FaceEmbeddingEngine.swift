@@ -277,11 +277,6 @@ final class FaceEmbedder {
             let scale = tensor.quantizationParameters?.scale ?? 1
             let zeroPoint = Float(tensor.quantizationParameters?.zeroPoint ?? 0)
             return values.map { (Float($0) - zeroPoint) * scale }
-        case .int8:
-            let values = tensor.data.toArray(type: Int8.self)
-            let scale = tensor.quantizationParameters?.scale ?? 1
-            let zeroPoint = Float(tensor.quantizationParameters?.zeroPoint ?? 0)
-            return values.map { (Float($0) - zeroPoint) * scale }
         default:
             throw FaceEmbeddingError.unsupportedOutputType
         }

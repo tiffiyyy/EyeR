@@ -1,0 +1,15 @@
+# GlimpseH4H – TensorFlow Lite for on-device ML (e.g. .tflite models)
+platform :ios, '13.0'
+use_frameworks!
+
+target 'GlimpseH4H' do
+  pod 'TensorFlowLiteSwift', '~> 2.17'
+end
+
+post_install do |installer|
+  installer.pods_project.targets.each do |target|
+    target.build_configurations.each do |config|
+      config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '13.0'
+    end
+  end
+end

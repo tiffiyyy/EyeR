@@ -4,6 +4,7 @@
 //
 
 import Foundation
+import UIKit
 
 final class DataStore: ObservableObject {
     static let shared = DataStore()
@@ -19,7 +20,20 @@ final class DataStore: ObservableObject {
     }
 
     func load() {
-        people = (UserDefaults.standard.data(forKey: peopleKey).flatMap { try? JSONDecoder().decode([Person].self, from: $0) }) ?? []
+        var loaded = (UserDefaults.standard.data(forKey: peopleKey).flatMap { try? JSONDecoder().decode([Person].self, from: $0) }) ?? []
+        var didMigrate = false
+        for i in loaded.indices where loaded[i].legacyPhotoDataForMigration != nil {
+            guard let dataList = loaded[i].legacyPhotoDataForMigration, !dataList.isEmpty else { continue }
+            let images = dataList.compactMap { UIImage(data: $0) }
+            guard !images.isEmpty else { continue }
+            let folder = "person_\(loaded[i].id.uuidString)"
+            let paths = ImageStore.saveImages(images, under: folder, compressionQuality: 0.8)
+            loaded[i].photoPaths = paths
+            loaded[i].legacyPhotoDataForMigration = nil
+            didMigrate = true
+        }
+        people = loaded
+        if didMigrate { savePeople() }
         rooms = (UserDefaults.standard.data(forKey: roomsKey).flatMap { try? JSONDecoder().decode([Room].self, from: $0) }) ?? []
     }
 
@@ -36,6 +50,7 @@ final class DataStore: ObservableObject {
     }
 
     func removePerson(id: UUID) {
+        ImageStore.removeFolder("person_\(id.uuidString)")
         people.removeAll { $0.id == id }
         savePeople()
     }

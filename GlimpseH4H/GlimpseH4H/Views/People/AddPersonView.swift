@@ -121,8 +121,7 @@ struct AddPersonView: View {
                 if let p = existingPerson {
                     name = p.name
                     relationship = p.relationship
-                    let source = p.enrollmentImageData.isEmpty ? p.embeddingData : p.enrollmentImageData
-                    capturedImages = source.compactMap { UIImage(data: $0) }
+                    capturedImages = p.photoPaths.compactMap { ImageStore.loadImage(relativePath: $0) }
                 }
             }
         }
@@ -165,32 +164,53 @@ struct AddPersonView: View {
     private func saveAndDismiss() async {
         guard !isSaving else { return }
         isSaving = true
-        defer { isSaving = false }
 
-        do {
-            let enrollment = try FaceEnrollmentService.shared.enroll(from: Array(capturedImages.prefix(maxPhotos)))
-            if let existing = existingPerson {
-                var updated = existing
-                updated.name = name.trimmingCharacters(in: .whitespaces)
-                updated.relationship = relationship.trimmingCharacters(in: .whitespaces)
-                updated.enrollmentImageData = enrollment.keptImages
-                updated.faceEmbedding = enrollment.embedding
-                updated.embeddingData = []
-                dataStore.updatePerson(updated)
-            } else {
-                let person = Person(
-                    name: name.trimmingCharacters(in: .whitespaces),
-                    relationship: relationship.trimmingCharacters(in: .whitespaces),
-                    conversationSummary: "",
-                    embeddingData: [],
-                    enrollmentImageData: enrollment.keptImages,
-                    faceEmbedding: enrollment.embedding
-                )
-                dataStore.addPerson(person)
+        let images = Array(capturedImages.prefix(maxPhotos))
+        let nameTrimmed = name.trimmingCharacters(in: .whitespaces)
+        let relationshipTrimmed = relationship.trimmingCharacters(in: .whitespaces)
+        let existing = existingPerson
+
+        Task.detached(priority: .userInitiated) { [dataStore] in
+            do {
+                let enrollment = try FaceEnrollmentService.shared.enroll(from: images)
+                let folder: String
+                let personId: UUID
+                if let existing = existing {
+                    personId = existing.id
+                    folder = "person_\(existing.id.uuidString)"
+                } else {
+                    personId = UUID()
+                    folder = "person_\(personId.uuidString)"
+                }
+                let paths = ImageStore.saveImages(images, under: folder, compressionQuality: 0.8)
+                await MainActor.run {
+                    if let existing = existing {
+                        var updated = existing
+                        updated.name = nameTrimmed
+                        updated.relationship = relationshipTrimmed
+                        updated.photoPaths = paths
+                        updated.faceEmbedding = enrollment.embedding
+                        dataStore.updatePerson(updated)
+                    } else {
+                        let person = Person(
+                            id: personId,
+                            name: nameTrimmed,
+                            relationship: relationshipTrimmed,
+                            conversationSummary: "",
+                            photoPaths: paths,
+                            faceEmbedding: enrollment.embedding
+                        )
+                        dataStore.addPerson(person)
+                    }
+                    isSaving = false
+                    dismiss()
+                }
+            } catch {
+                await MainActor.run {
+                    saveErrorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+                    isSaving = false
+                }
             }
-            dismiss()
-        } catch {
-            saveErrorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
         }
     }
 }

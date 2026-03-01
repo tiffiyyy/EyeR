@@ -8,7 +8,7 @@ import Foundation
 
 enum FaceMatcher {
     /// MobileFaceNet-style cosine threshold. Tune with real enrollment/live samples.
-    static let defaultThreshold: Float = 0.55
+    static let defaultThreshold: Float = 0.45
 
     static func l2Normalize(_ vector: [Float]) -> [Float] {
         let sumSquares = vector.reduce(0) { $0 + $1 * $1 }
@@ -31,7 +31,16 @@ enum FaceMatcher {
         candidates: [(personId: UUID, embedding: [Float])],
         threshold: Float = defaultThreshold
     ) -> UUID? {
-        guard !candidates.isEmpty else { return nil }
+        bestMatchWithScore(probeEmbedding: probeEmbedding, candidates: candidates, threshold: threshold).matchId
+    }
+
+    /// Returns match ID (if above threshold) and best cosine score for debugging.
+    static func bestMatchWithScore(
+        probeEmbedding: [Float],
+        candidates: [(personId: UUID, embedding: [Float])],
+        threshold: Float = defaultThreshold
+    ) -> (matchId: UUID?, bestScore: Float) {
+        guard !candidates.isEmpty else { return (nil, -1) }
         let normalizedProbe = l2Normalize(probeEmbedding)
 
         var bestId: UUID?
@@ -43,7 +52,7 @@ enum FaceMatcher {
                 bestId = candidate.personId
             }
         }
-        guard bestScore >= threshold else { return nil }
-        return bestId
+        let matchId = bestScore >= threshold ? bestId : nil
+        return (matchId, bestScore)
     }
 }

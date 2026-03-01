@@ -5,6 +5,10 @@ todo.md
 # dependencies
 node_modules/
 
+# CocoaPods (iOS)
+Pods/
+*.xcworkspace/xcuserdata/
+
 # Expo
 .expo/
 dist/
