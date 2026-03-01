@@ -10,7 +10,10 @@ struct Person: Identifiable, Codable, Equatable {
     var name: String
     var relationship: String
     var conversationSummary: String
-    var embeddingData: [Data]  // facial embedding blobs from 4–5 photos
+    /// JPEG image data for this person's reference photos (used in onboarding UI).
+    var embeddingData: [Data]
+    /// Face embedding vectors (one per onboarding photo) used for recognition.
+    var faceEmbeddings: [[Float]]
     var createdAt: Date
     var lastSeenAt: Date?
 
@@ -20,6 +23,7 @@ struct Person: Identifiable, Codable, Equatable {
         relationship: String,
         conversationSummary: String = "",
         embeddingData: [Data] = [],
+        faceEmbeddings: [[Float]] = [],
         createdAt: Date = Date(),
         lastSeenAt: Date? = nil
     ) {
@@ -28,7 +32,9 @@ struct Person: Identifiable, Codable, Equatable {
         self.relationship = relationship
         self.conversationSummary = conversationSummary
         self.embeddingData = embeddingData
+        self.faceEmbeddings = faceEmbeddings
         self.createdAt = createdAt
         self.lastSeenAt = lastSeenAt
     }
 }
+

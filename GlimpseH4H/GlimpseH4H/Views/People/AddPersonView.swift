@@ -143,19 +143,25 @@ struct AddPersonView: View {
     }
 
     private func saveAndDismiss() {
-        let data = capturedImages.prefix(maxPhotos).compactMap { $0.jpegData(compressionQuality: 0.8) }
+        let images = Array(capturedImages.prefix(maxPhotos))
+        let photoData = images.compactMap { $0.jpegData(compressionQuality: 0.8) }
+        let embeddings: [[Float]] = images.compactMap {
+            FaceEmbeddingService.shared.embedding(from: $0)
+        }
         if let existing = existingPerson {
             var updated = existing
             updated.name = name.trimmingCharacters(in: .whitespaces)
             updated.relationship = relationship.trimmingCharacters(in: .whitespaces)
-            updated.embeddingData = data
+            updated.embeddingData = photoData
+            updated.faceEmbeddings = embeddings
             dataStore.updatePerson(updated)
         } else {
             let person = Person(
                 name: name.trimmingCharacters(in: .whitespaces),
                 relationship: relationship.trimmingCharacters(in: .whitespaces),
                 conversationSummary: "",
-                embeddingData: data
+                embeddingData: photoData,
+                faceEmbeddings: embeddings
             )
             dataStore.addPerson(person)
         }

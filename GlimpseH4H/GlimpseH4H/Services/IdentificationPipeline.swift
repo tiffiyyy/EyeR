@@ -40,6 +40,11 @@ final class IdentificationPipeline: ObservableObject {
     private var lastIdentifiedPersonId: UUID?
     private let faceStableDuration: TimeInterval = 2.0
     private let personLeftDuration: TimeInterval = 5.0
+    /// How often to re-run recognition for a locked-in person.
+    private let recognitionInterval: TimeInterval = 5.0
+    /// Minimum similarity score (cosine) for a match to be considered valid.
+    private let matchThreshold: Float = 0.7
+    private var lastRecognitionTime: Date?
     private var dataStore: DataStore?
     private var isRunning = false
     private let queue = DispatchQueue(label: "pipeline.queue")
@@ -71,12 +76,12 @@ final class IdentificationPipeline: ObservableObject {
             let now = Date()
             let boxes = results.map { FaceOutline(boundingBox: $0.boundingBox) }
             queue.async { [weak self] in
-                self?.handleFaceResults(boxes: boxes, at: now)
+                self?.handleFaceResults(pixelBuffer: pixelBuffer, boxes: boxes, at: now)
             }
         } catch {}
     }
 
-    private func handleFaceResults(boxes: [FaceOutline], at now: Date) {
+    private func handleFaceResults(pixelBuffer: CVPixelBuffer, boxes: [FaceOutline], at now: Date) {
         let hadFace = !boxes.isEmpty
         if hadFace {
             if firstFaceSeenAt == nil { firstFaceSeenAt = now }
@@ -85,6 +90,7 @@ final class IdentificationPipeline: ObservableObject {
             firstFaceSeenAt = nil
             if let last = lastFaceSeenTime, now.timeIntervalSince(last) >= personLeftDuration {
                 lastIdentifiedPersonId = nil
+                lastRecognitionTime = nil
                 lastFaceSeenTime = nil
                 DispatchQueue.main.async { [weak self] in
                     self?.currentlyIdentifiedPerson = nil
@@ -96,20 +102,126 @@ final class IdentificationPipeline: ObservableObject {
             self?.visibleFaceOutlines = boxes
         }
 
-        if hadFace, let first = firstFaceSeenAt, now.timeIntervalSince(first) >= faceStableDuration, lastIdentifiedPersonId == nil {
-            identifyCurrentFaceAndShowCard()
+        guard hadFace else { return }
+
+        // No one currently locked in: wait until a face has been stable for `faceStableDuration`,
+        // then attempt to recognize against stored embeddings.
+        if lastIdentifiedPersonId == nil,
+           let first = firstFaceSeenAt,
+           now.timeIntervalSince(first) >= faceStableDuration {
+            // Avoid hammering recognition if multiple frames cross the stability threshold.
+            if let lastCheck = lastRecognitionTime,
+               now.timeIntervalSince(lastCheck) < faceStableDuration / 2 {
+                return
+            }
+            lastRecognitionTime = now
+            runRecognition(on: pixelBuffer, boxes: boxes, now: now, expectedPersonId: nil)
+            return
+        }
+
+        // Someone is already locked in: every `recognitionInterval` seconds, re-run recognition
+        // to confirm they are still the main figure in frame. If not, clear and fall back to
+        // the stable-face detection flow.
+        if let lockedId = lastIdentifiedPersonId {
+            if let lastCheck = lastRecognitionTime,
+               now.timeIntervalSince(lastCheck) < recognitionInterval {
+                return
+            }
+            lastRecognitionTime = now
+            runRecognition(on: pixelBuffer, boxes: boxes, now: now, expectedPersonId: lockedId)
         }
     }
 
-    private func identifyCurrentFaceAndShowCard() {
+    private func runRecognition(on pixelBuffer: CVPixelBuffer, boxes: [FaceOutline], now: Date, expectedPersonId: UUID?) {
         guard let dataStore = dataStore, !dataStore.people.isEmpty else { return }
-        let matchId = dataStore.people.first?.id
-        lastIdentifiedPersonId = matchId
-        if let id = matchId {
-            DispatchQueue.main.async { [weak self] in
-                self?.currentlyIdentifiedPerson = IdentifiedPerson(personId: id)
+
+        // Choose the largest face as the "main" figure in frame.
+        guard let mainFace = boxes.max(by: { a, b in
+            let areaA = a.boundingBox.width * a.boundingBox.height
+            let areaB = b.boundingBox.width * b.boundingBox.height
+            return areaA < areaB
+        }) else {
+            return
+        }
+
+        // Generate an embedding for the current face.
+        guard let currentEmbedding = FaceEmbeddingService.shared.embedding(
+            from: pixelBuffer,
+            boundingBox: mainFace.boundingBox
+        ) else {
+            // If we previously had someone locked in but can no longer get an embedding,
+            // treat this as losing track and reset to detection mode.
+            if expectedPersonId != nil {
+                lastIdentifiedPersonId = nil
+                DispatchQueue.main.async { [weak self] in
+                    self?.currentlyIdentifiedPerson = nil
+                }
             }
-            dataStore.updateLastSeen(personId: id, at: Date())
+            return
+        }
+
+        // Compare against all stored embeddings for all people.
+        var bestMatchId: UUID?
+        var bestScore: Float = -1
+
+        for person in dataStore.people {
+            for embedding in person.faceEmbeddings {
+                guard embedding.count == currentEmbedding.count, !embedding.isEmpty else { continue }
+                let score = cosineSimilarity(currentEmbedding, embedding)
+                if score > bestScore {
+                    bestScore = score
+                    bestMatchId = person.id
+                }
+            }
+        }
+
+        guard let matchId = bestMatchId, bestScore >= matchThreshold else {
+            // No valid match: if we had an expected person, clear and fall back to detection.
+            if expectedPersonId != nil {
+                lastIdentifiedPersonId = nil
+                DispatchQueue.main.async { [weak self] in
+                    self?.currentlyIdentifiedPerson = nil
+                }
+            }
+            return
+        }
+
+        // If we were re-validating a locked-in person and the best match is *not* them,
+        // treat this as the original person leaving; clear and let the stable detection
+        // flow decide when to recognize the new person.
+        if let expected = expectedPersonId, expected != matchId {
+            lastIdentifiedPersonId = nil
+            DispatchQueue.main.async { [weak self] in
+                self?.currentlyIdentifiedPerson = nil
+            }
+            return
+        }
+
+        // At this point, we either have:
+        // - An initial recognition (expectedPersonId == nil), or
+        // - A re-validation that confirms the same person is still present.
+        lastIdentifiedPersonId = matchId
+        DispatchQueue.main.async { [weak self] in
+            self?.currentlyIdentifiedPerson = IdentifiedPerson(personId: matchId)
+            self?.dataStore?.updateLastSeen(personId: matchId, at: now)
         }
     }
+
+    private func cosineSimilarity(_ a: [Float], _ b: [Float]) -> Float {
+        guard a.count == b.count, !a.isEmpty else { return -1 }
+        var dot: Float = 0
+        var normA: Float = 0
+        var normB: Float = 0
+        for i in 0..<a.count {
+            let x = a[i]
+            let y = b[i]
+            dot += x * y
+            normA += x * x
+            normB += y * y
+        }
+        let denom = (normA.squareRoot() * normB.squareRoot())
+        guard denom > 0 else { return -1 }
+        return dot / denom
+    }
 }
+
