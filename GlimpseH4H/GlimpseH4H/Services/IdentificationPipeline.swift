@@ -11,8 +11,15 @@ import Vision
 struct FaceOutline: Identifiable {
     let id = UUID()
     var boundingBox: CGRect  // normalized 0–1, origin bottom-left (Vision)
-    func boundingBox(in size: CGSize) -> CGRect {
-        let r = boundingBox
+    /// Converts to view rect. Pass expansion (e.g. FaceCropper.faceCropExpansion) so the drawn rect matches the crop used for recognition.
+    func boundingBox(in size: CGSize, expansion: CGFloat = 0) -> CGRect {
+        var r = boundingBox
+        if expansion > 0 {
+            let ex = r.width * expansion
+            let ey = r.height * expansion
+            r = CGRect(x: r.minX - ex, y: r.minY - ey, width: r.width + 2 * ex, height: r.height + 2 * ey)
+            r = r.intersection(CGRect(x: 0, y: 0, width: 1, height: 1))
+        }
         return CGRect(
             x: size.width - (r.minX + r.width) * size.width,
             y: size.height - (r.minY + r.height) * size.height,
@@ -43,6 +50,8 @@ final class IdentificationPipeline: ObservableObject {
     private let embeddingThrottleInterval: TimeInterval = 1.0
     private var lastEmbeddingTime: Date?
     private let matchThreshold: Float = FaceMatcher.defaultThreshold
+    private let minFaceConfidence: Float = 0.4
+    private let minNormalizedFaceSize: CGFloat = 0.08
     private var dataStore: DataStore?
     private var isRunning = false
     private let queue = DispatchQueue(label: "pipeline.queue")
@@ -73,14 +82,21 @@ final class IdentificationPipeline: ObservableObject {
             try handler.perform([request])
             guard let results = request.results else { return }
             let now = Date()
-            let boxes = results.map { FaceOutline(boundingBox: $0.boundingBox) }
-            // Create face crop while pixel buffer is still valid (capture owns it after we return).
+            let valid = results.filter { obs in
+                obs.confidence >= minFaceConfidence
+                    && obs.boundingBox.width >= minNormalizedFaceSize
+                    && obs.boundingBox.height >= minNormalizedFaceSize
+            }
+            let sorted = valid.sorted { lhs, rhs in
+                (lhs.boundingBox.width * lhs.boundingBox.height) > (rhs.boundingBox.width * rhs.boundingBox.height)
+            }
+            let boxes = sorted.map { FaceOutline(boundingBox: $0.boundingBox) }
             var faceCrop: CGImage?
             var primaryFace: FaceOutline?
-            if let first = boxes.first {
-                primaryFace = first
+            if let largest = sorted.first {
+                primaryFace = boxes.first
                 if let frameImage = FaceCropper.makeOrientedCGImage(from: pixelBuffer, orientation: .leftMirrored) {
-                    faceCrop = FaceCropper.cropFace(from: frameImage, boundingBox: first.boundingBox)
+                    faceCrop = FaceCropper.cropFace(from: frameImage, boundingBox: largest.boundingBox, expansion: FaceCropper.faceCropExpansion)
                 }
             }
             queue.async { [weak self] in

@@ -24,7 +24,7 @@ struct CameraView: View {
                     }
 
                 ForEach(pipeline.visibleFaceOutlines) { outline in
-                    FaceOutlineView(rect: outline.boundingBox(in: geo.size))
+                    FaceOutlineView(rect: outline.boundingBox(in: geo.size, expansion: FaceCropper.faceCropExpansion))
                 }
 
                 if let roomName = pipeline.currentRoomName {

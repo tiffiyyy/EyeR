@@ -11,6 +11,8 @@ import Vision
 
 enum FaceCropper {
     private static let context = CIContext(options: nil)
+    /// Expansion used for cropping; must match the rect drawn in the camera overlay.
+    static let faceCropExpansion: CGFloat = 0.20
 
     static func makeOrientedCGImage(from pixelBuffer: CVPixelBuffer, orientation: CGImagePropertyOrientation) -> CGImage? {
         let ciImage = CIImage(cvPixelBuffer: pixelBuffer).oriented(orientation)
@@ -32,7 +34,7 @@ enum FaceCropper {
     }
 
     /// Bounding box is Vision-normalized (origin at bottom-left).
-    static func cropFace(from cgImage: CGImage, boundingBox: CGRect, expansion: CGFloat = 0.20) -> CGImage? {
+    static func cropFace(from cgImage: CGImage, boundingBox: CGRect, expansion: CGFloat = FaceCropper.faceCropExpansion) -> CGImage? {
         let width = CGFloat(cgImage.width)
         let height = CGFloat(cgImage.height)
         guard width > 0, height > 0 else { return nil }
@@ -50,7 +52,7 @@ enum FaceCropper {
         return cgImage.cropping(to: rect)
     }
 
-    static func cropLargestFace(from image: UIImage, expansion: CGFloat = 0.20) -> CGImage? {
+    static func cropLargestFace(from image: UIImage, expansion: CGFloat = FaceCropper.faceCropExpansion) -> CGImage? {
         guard let cgImage = image.cgImage else { return nil }
         let orientation = CGImagePropertyOrientation(image.imageOrientation)
         guard let face = detectLargestFace(in: cgImage, orientation: orientation) else { return nil }
