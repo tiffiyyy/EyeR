@@ -30,12 +30,23 @@ struct AddPersonView: View {
                         .foregroundStyle(.secondary)
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 12) {
-                            ForEach(Array(capturedImages.enumerated()), id: \.offset) { _, img in
-                                Image(uiImage: img)
-                                    .resizable()
-                                    .scaledToFill()
-                                    .frame(width: 80, height: 80)
-                                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                            ForEach(Array(capturedImages.enumerated()), id: \.offset) { index, img in
+                                ZStack(alignment: .topTrailing) {
+                                    Image(uiImage: img)
+                                        .resizable()
+                                        .scaledToFill()
+                                        .frame(width: 80, height: 80)
+                                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                                    Button {
+                                        capturedImages.remove(at: index)
+                                    } label: {
+                                        Image(systemName: "xmark.circle.fill")
+                                            .font(.title3)
+                                            .foregroundStyle(.white)
+                                            .background(Circle().fill(.black.opacity(0.6)))
+                                    }
+                                    .offset(x: 6, y: -6)
+                                }
                             }
                             if capturedImages.count < maxPhotos {
                                 Menu {
@@ -71,8 +82,8 @@ struct AddPersonView: View {
                     }
                 }
                 Section("Details") {
-                    TextField("Name", text: $name)
-                    TextField("Relationship to you", text: $relationship)
+                    RequiredTextField(label: "Name", text: $name, placeholder: "Name")
+                    RequiredTextField(label: "Relationship", text: $relationship, placeholder: "Relationship to you")
                 }
             }
             .navigationTitle(isEditing ? "Edit Person" : "Add Person")
@@ -93,8 +104,17 @@ struct AddPersonView: View {
                 ), sourceType: .camera, onDismiss: { showCamera = false })
             }
             .onChange(of: selectedLibraryItems) { _, newItems in
+                guard !newItems.isEmpty else { return }
                 Task {
-                    await loadPhotos(from: newItems)
+                    let loaded = await PhotoLibraryLoader.loadImages(
+                        from: newItems,
+                        maxCount: maxPhotos,
+                        currentImages: capturedImages
+                    )
+                    await MainActor.run {
+                        capturedImages = loaded
+                        selectedLibraryItems = []
+                    }
                 }
             }
             .onAppear {
@@ -111,16 +131,6 @@ struct AddPersonView: View {
         !name.trimmingCharacters(in: .whitespaces).isEmpty
             && !relationship.trimmingCharacters(in: .whitespaces).isEmpty
             && capturedImages.count >= minPhotos
-    }
-
-    private func loadPhotos(from items: [PhotosPickerItem]) async {
-        for item in items {
-            if let data = try? await item.loadTransferable(type: Data.self),
-               let img = UIImage(data: data), capturedImages.count < maxPhotos {
-                await MainActor.run { capturedImages.append(img) }
-            }
-        }
-        await MainActor.run { selectedLibraryItems = [] }
     }
 
     private func saveAndDismiss() {

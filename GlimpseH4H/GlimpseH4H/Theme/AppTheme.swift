@@ -16,4 +16,6 @@ enum AppTheme {
     static let faceOutlineColor = Color.white
     static let cardCornerRadius: CGFloat = 16
     static let navIconSize: CGFloat = 24
+    /// Pause/Resume center button in tab bar
+    static let pauseButtonColor = Color(red: 0xA0/255, green: 0xA1/255, blue: 0xEA/255)
 }

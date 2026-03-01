@@ -8,6 +8,7 @@ import AVFoundation
 
 struct CameraView: View {
     @Binding var isFullScreen: Bool
+    @Binding var isPaused: Bool
     @StateObject private var camera = CameraController()
     @StateObject private var pipeline = IdentificationPipeline.shared
     @EnvironmentObject private var dataStore: DataStore
@@ -35,16 +36,53 @@ struct CameraView: View {
                     IdentificationCardView(person: person)
                         .transition(.opacity.combined(with: .scale(scale: 0.95)))
                 }
+
+                VStack {
+                    HStack {
+                        Spacer()
+                        CameraFlipButton(camera: camera)
+                            .padding(.trailing, 20)
+                            .padding(.top, 12)
+                    }
+                    Spacer()
+                }
+                .allowsHitTesting(true)
             }
         }
         .ignoresSafeArea()
         .onAppear {
             camera.checkPermissionsAndStart()
-            pipeline.start(dataStore: dataStore)
+            if !isPaused {
+                pipeline.start(dataStore: dataStore)
+            }
         }
         .onDisappear {
             pipeline.pause()
         }
+        .onChange(of: isPaused) { _, paused in
+            if paused {
+                pipeline.pause()
+            } else {
+                pipeline.start(dataStore: dataStore)
+            }
+        }
+    }
+}
+
+private struct CameraFlipButton: View {
+    @ObservedObject var camera: CameraController
+
+    var body: some View {
+        Button {
+            camera.switchCamera()
+        } label: {
+            Image(systemName: "camera.rotate.fill")
+                .font(.system(size: 22))
+                .foregroundStyle(.white)
+                .padding(10)
+                .background(Circle().fill(.black.opacity(0.4)))
+        }
+        .buttonStyle(.plain)
     }
 }
 

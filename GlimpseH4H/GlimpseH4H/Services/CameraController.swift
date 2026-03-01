@@ -10,6 +10,7 @@ final class CameraController: NSObject, ObservableObject {
     let session = AVCaptureSession()
     private let queue = DispatchQueue(label: "camera.queue")
     private var videoOutput: AVCaptureVideoDataOutput?
+    private var currentPosition: AVCaptureDevice.Position = .back
 
     override init() {
         super.init()
@@ -30,18 +31,19 @@ final class CameraController: NSObject, ObservableObject {
         }
     }
 
+    func switchCamera() {
+        currentPosition = currentPosition == .back ? .front : .back
+        queue.async { [weak self] in
+            self?.reconfigureInput()
+        }
+    }
+
     private func configureAndStart() {
         queue.async { [weak self] in
             guard let self else { return }
             session.beginConfiguration()
             session.sessionPreset = .high
-            guard let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .front),
-                  let input = try? AVCaptureDeviceInput(device: device) else {
-                session.commitConfiguration()
-                return
-            }
-            if session.canAddInput(input) { session.addInput(input) }
-
+            addInputForCurrentPosition()
             let output = AVCaptureVideoDataOutput()
             output.videoSettings = [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA]
             output.alwaysDiscardsLateVideoFrames = true
@@ -55,6 +57,20 @@ final class CameraController: NSObject, ObservableObject {
                 self.session.startRunning()
             }
         }
+    }
+
+    private func reconfigureInput() {
+        session.beginConfiguration()
+        session.inputs.forEach { session.removeInput($0) }
+        addInputForCurrentPosition()
+        session.commitConfiguration()
+    }
+
+    private func addInputForCurrentPosition() {
+        guard let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: currentPosition),
+              let input = try? AVCaptureDeviceInput(device: device),
+              session.canAddInput(input) else { return }
+        session.addInput(input)
     }
 }
 
