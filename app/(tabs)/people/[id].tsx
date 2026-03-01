@@ -6,33 +6,39 @@ import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from "rea
 import { interactionsRepository, peopleRepository } from "@/src/data/repositories";
 import { type InteractionRecord, type PersonWithEmbeddings } from "@/src/domain/types";
 
+// note: this file serves as a template file/function 
+// for each person created, one of these files will be "created" (so that their person details can be viewed)
 export default function PersonDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const [record, setRecord] = useState<PersonWithEmbeddings | null>(null);
   const [interactions, setInteractions] = useState<InteractionRecord[]>([]);
 
+  // we use "useCallback" to ensure that person data remains intact 
   const loadPerson = useCallback(async () => {
     if (!id) {
       return;
     }
+    // waits until person is returned from the db then set the record 
     const person = await peopleRepository.getById(id);
     const personInteractions = await interactionsRepository.listByPerson(id);
     setRecord(person);
     setInteractions(personInteractions);
   }, [id]);
 
+  // if person cannot be loaded, throw an error 
   useFocusEffect(
     useCallback(() => {
       loadPerson().catch((error) => console.error("Failed to load person", error));
     }, [loadPerson])
   );
 
+  // function to delete person from db 
   const onDelete = () => {
     if (!id) {
       return;
     }
-    Alert.alert("Delete person?", "This will remove their embeddings too.", [
+    Alert.alert("Delete person?", "This action cannot be undone.", [
       { text: "Cancel", style: "cancel" },
       {
         text: "Delete",
@@ -45,6 +51,7 @@ export default function PersonDetailScreen() {
     ]);
   };
 
+  // if record does not exist, throw an error 
   if (!record) {
     return (
       <View style={styles.emptyState}>
@@ -53,10 +60,12 @@ export default function PersonDetailScreen() {
     );
   }
 
+  // removes any duplicate images uploaded and creates an array of images to be displayed for each person 
   const uniquePhotos = Array.from(
     new Set(record.embeddings.map((item) => item.sourcePhotoUri).filter((value): value is string => !!value))
   );
 
+  // tsx code for page layout 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Text style={styles.name}>{record.person.name}</Text>
