@@ -51,7 +51,7 @@ final class FaceEmbeddingService {
             return
         }
 
-        if let visionModel = try? VNCoreMLModel(model: coreMLModel) {
+        if let visionModel = try? VNCoreMLModel(for: coreMLModel) {
             vn = visionModel
             fallback = nil
             inName = nil
@@ -111,7 +111,7 @@ final class FaceEmbeddingService {
         let faceDetection = VNDetectFaceRectanglesRequest()
         let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
         do { try handler.perform([faceDetection]) } catch { return nil }
-        guard let results = faceDetection.results as? [VNFaceObservation],
+        guard let results = faceDetection.results,
               let mainFace = results.max(by: { a, b in
                   a.boundingBox.width * a.boundingBox.height < b.boundingBox.width * b.boundingBox.height
               }) else { return nil }
@@ -142,7 +142,7 @@ final class FaceEmbeddingService {
         let faceDetection = VNDetectFaceRectanglesRequest()
         let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
         do { try handler.perform([faceDetection]) } catch { return nil }
-        guard let results = faceDetection.results as? [VNFaceObservation],
+        guard let results = faceDetection.results,
               let mainFace = results.max(by: { a, b in
                   a.boundingBox.width * a.boundingBox.height < b.boundingBox.width * b.boundingBox.height
               }) else { return nil }
@@ -204,9 +204,9 @@ final class FaceEmbeddingService {
                     let r = Float(ptr[offset]) / 255.0
                     let g = Float(ptr[offset + 1]) / 255.0
                     let b = Float(ptr[offset + 2]) / 255.0
-                    arr[[0, 0, y, x] as [NSNumber]] = NSNumber(value: r)
-                    arr[[0, 1, y, x] as [NSNumber]] = NSNumber(value: g)
-                    arr[[0, 2, y, x] as [NSNumber]] = NSNumber(value: b)
+                    arr[[0, 0, y, x].map { NSNumber(value: $0) }] = NSNumber(value: r)
+                    arr[[0, 1, y, x].map { NSNumber(value: $0) }] = NSNumber(value: g)
+                    arr[[0, 2, y, x].map { NSNumber(value: $0) }] = NSNumber(value: b)
                 }
             }
         } else {
@@ -218,9 +218,9 @@ final class FaceEmbeddingService {
                     let r = Float(ptr[offset]) / 255.0
                     let g = Float(ptr[offset + 1]) / 255.0
                     let b = Float(ptr[offset + 2]) / 255.0
-                    arr[[0, y, x, 0] as [NSNumber]] = NSNumber(value: r)
-                    arr[[0, y, x, 1] as [NSNumber]] = NSNumber(value: g)
-                    arr[[0, y, x, 2] as [NSNumber]] = NSNumber(value: b)
+                    arr[[0, y, x, 0].map { NSNumber(value: $0) }] = NSNumber(value: r)
+                    arr[[0, y, x, 1].map { NSNumber(value: $0) }] = NSNumber(value: g)
+                    arr[[0, y, x, 2].map { NSNumber(value: $0) }] = NSNumber(value: b)
                 }
             }
         }
