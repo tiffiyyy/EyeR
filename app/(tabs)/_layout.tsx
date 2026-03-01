@@ -42,8 +42,8 @@ function TabLayoutContent() {
       <Tabs.Screen
         name="rooms"
         options={{
-          title: 'Memories',
-          tabBarLabel: 'Memories',
+          title: 'Rooms',
+          tabBarLabel: 'Rooms',
           tabBarIcon: ({ color, size }) => <Ionicons name="book" size={size} color={color} />,
         }}
       />
