@@ -88,6 +88,20 @@ final class FaceEmbeddingService {
 
     var isModelAvailable: Bool { vnModel != nil || fallbackModel != nil }
 
+    /// Returns true if at least one face is detected. Use this to show which photos will produce embeddings.
+    /// Background/white space is ignored—only the detected face region is used when creating embeddings.
+    func hasDetectableFace(in image: UIImage) -> Bool {
+        guard let cgImage = image.cgImage else { return false }
+        let request = VNDetectFaceRectanglesRequest()
+        let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
+        do {
+            try handler.perform([request])
+            return (request.results?.isEmpty ?? true) == false
+        } catch {
+            return false
+        }
+    }
+
     func embedding(from image: UIImage) -> [Float]? {
         guard let cgImage = image.cgImage else { return nil }
         if let vnModel { return embeddingViaVision(cgImage: cgImage, vnModel: vnModel) }

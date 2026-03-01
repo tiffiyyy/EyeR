@@ -18,6 +18,8 @@ struct AddPersonView: View {
     @State private var selectedLibraryItems: [PhotosPickerItem] = []
     @State private var saveResultMessage: String?
     @State private var showSaveResultAlert = false
+    /// Index → true if a face was detected (will produce an embedding). Updated when photos change.
+    @State private var faceDetectedInPhoto: [Int: Bool] = [:]
     private let minPhotos = 4
     private let maxPhotos = 8
 
@@ -48,6 +50,7 @@ struct AddPersonView: View {
                                             .foregroundStyle(.white, .red)
                                     }
                                     .padding(4)
+                                    faceBadge(for: index)
                                 }
                             }
                             if capturedImages.count < maxPhotos {
@@ -72,6 +75,9 @@ struct AddPersonView: View {
                             .font(.caption)
                             .foregroundStyle(.orange)
                     }
+                    Text("Only the detected face is used for recognition; background is ignored. ✓ = face found.")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
                 }
                 Section("Details") {
                     TextField("Name", text: $name)
@@ -106,6 +112,10 @@ struct AddPersonView: View {
                     relationship = p.relationship
                     capturedImages = p.embeddingData.compactMap { UIImage(data: $0) }
                 }
+                checkFacesInPhotos()
+            }
+            .onChange(of: capturedImages.count) { _, _ in
+                checkFacesInPhotos()
             }
             .alert("Saved", isPresented: $showSaveResultAlert) {
                 Button("OK") {
@@ -150,7 +160,34 @@ struct AddPersonView: View {
                 await MainActor.run { capturedImages.append(img) }
             }
         }
-        await MainActor.run { selectedLibraryItems = [] }
+        await MainActor.run { selectedLibraryItems = []; checkFacesInPhotos() }
+    }
+
+    private func checkFacesInPhotos() {
+        let images = capturedImages
+        Task.detached(priority: .userInitiated) {
+            var result: [Int: Bool] = [:]
+            for (index, img) in images.enumerated() {
+                result[index] = FaceEmbeddingService.shared.hasDetectableFace(in: img)
+            }
+            await MainActor.run {
+                faceDetectedInPhoto = result
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func faceBadge(for index: Int) -> some View {
+        Group {
+            if let ok = faceDetectedInPhoto[index] {
+                Image(systemName: ok ? "face.smiling.fill" : "exclamationmark.triangle.fill")
+                    .font(.caption)
+                    .foregroundStyle(ok ? .green : .orange)
+                    .padding(4)
+                    .background(Circle().fill(.ultraThinMaterial))
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
     }
 
     private func saveAndDismiss() {
@@ -179,12 +216,17 @@ struct AddPersonView: View {
         }
         if embeddings.isEmpty {
             if FaceEmbeddingService.shared.isModelAvailable {
-                saveResultMessage = "Saved, but no face embeddings were created. Make sure each photo clearly shows one face."
+                saveResultMessage = "Saved, but no face embeddings were created. Make sure each photo clearly shows one face (not too small or far away)."
             } else {
                 saveResultMessage = "Saved. Face recognition is unavailable—add FaceEmbedding.mlmodel to the app target for recognition."
             }
         } else {
-            saveResultMessage = "Saved with \(embeddings.count) face embedding\(embeddings.count == 1 ? "" : "s"). \(nameTrimmed) can be recognized by the camera."
+            let total = images.count
+            if embeddings.count < total {
+                saveResultMessage = "Saved with \(embeddings.count) face embedding\(embeddings.count == 1 ? "" : "s") from \(total) photos. \(total - embeddings.count) photo(s) had no detectable face—use closer, clearer face shots. \(nameTrimmed) can be recognized by the camera."
+            } else {
+                saveResultMessage = "Saved with \(embeddings.count) face embedding\(embeddings.count == 1 ? "" : "s"). \(nameTrimmed) can be recognized by the camera."
+            }
         }
         showSaveResultAlert = true
     }
