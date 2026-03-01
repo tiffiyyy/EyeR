@@ -79,6 +79,20 @@ final class DataStore: ObservableObject {
         }
     }
 
+    func appendConversation(personId: UUID, transcript: String, summary: String, startedAt: Date, endedAt: Date) {
+        guard let i = people.firstIndex(where: { $0.id == personId }) else { return }
+        let record = ConversationRecord(
+            personId: personId,
+            startedAt: startedAt,
+            endedAt: endedAt,
+            transcript: transcript,
+            summary: summary
+        )
+        people[i].conversationHistory.append(record)
+        people[i].conversationSummary = summary
+        savePeople()
+    }
+
     private func savePeople() {
         guard let data = try? JSONEncoder().encode(people) else { return }
         UserDefaults.standard.set(data, forKey: peopleKey)

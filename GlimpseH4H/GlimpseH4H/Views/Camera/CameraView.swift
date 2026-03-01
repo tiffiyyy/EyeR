@@ -10,6 +10,7 @@ struct CameraView: View {
     @Binding var isFullScreen: Bool
     @StateObject private var camera = CameraController()
     @StateObject private var pipeline = IdentificationPipeline.shared
+    @StateObject private var conversationCoordinator = ConversationMemoryCoordinator.shared
     @EnvironmentObject private var dataStore: DataStore
 
     var body: some View {
@@ -41,9 +42,14 @@ struct CameraView: View {
         .onAppear {
             camera.checkPermissionsAndStart()
             pipeline.start(dataStore: dataStore)
+            conversationCoordinator.start(dataStore: dataStore)
         }
         .onDisappear {
             pipeline.pause()
+            conversationCoordinator.stop()
+        }
+        .onChange(of: pipeline.currentlyIdentifiedPerson?.personId) { _, newPersonId in
+            conversationCoordinator.handleRecognitionChange(personId: newPersonId)
         }
     }
 }

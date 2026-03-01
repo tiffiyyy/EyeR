@@ -475,6 +475,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSCameraUsageDescription = "Glimpse uses the camera to recognize people and rooms.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Glimpse may use the microphone for conversation features.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Glimpse transcribes conversations to remember what you discussed.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -507,6 +508,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSCameraUsageDescription = "Glimpse uses the camera to recognize people and rooms.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Glimpse may use the microphone for conversation features.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Glimpse transcribes conversations to remember what you discussed.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;

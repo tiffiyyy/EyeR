@@ -10,6 +10,7 @@ struct Person: Identifiable, Codable, Equatable {
     var name: String
     var relationship: String
     var conversationSummary: String
+    var conversationHistory: [ConversationRecord]
     /// Relative paths to enrollment photos in ImageStore (used for edit UI). Not stored in UserDefaults as raw Data.
     var photoPaths: [String]
     /// L2-normalized embedding vector used for runtime matching.
@@ -25,6 +26,7 @@ struct Person: Identifiable, Codable, Equatable {
         case name
         case relationship
         case conversationSummary
+        case conversationHistory
         case photoPaths
         case faceEmbedding
         case createdAt
@@ -38,6 +40,7 @@ struct Person: Identifiable, Codable, Equatable {
         name: String,
         relationship: String,
         conversationSummary: String = "",
+        conversationHistory: [ConversationRecord] = [],
         photoPaths: [String] = [],
         faceEmbedding: [Float] = [],
         createdAt: Date = Date(),
@@ -48,6 +51,7 @@ struct Person: Identifiable, Codable, Equatable {
         self.name = name
         self.relationship = relationship
         self.conversationSummary = conversationSummary
+        self.conversationHistory = conversationHistory
         self.photoPaths = photoPaths
         self.faceEmbedding = faceEmbedding
         self.createdAt = createdAt
@@ -61,6 +65,7 @@ struct Person: Identifiable, Codable, Equatable {
         name = try c.decode(String.self, forKey: .name)
         relationship = try c.decode(String.self, forKey: .relationship)
         conversationSummary = try c.decodeIfPresent(String.self, forKey: .conversationSummary) ?? ""
+        conversationHistory = try c.decodeIfPresent([ConversationRecord].self, forKey: .conversationHistory) ?? []
         faceEmbedding = try c.decodeIfPresent([Float].self, forKey: .faceEmbedding) ?? []
         createdAt = try c.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date()
         lastSeenAt = try c.decodeIfPresent(Date.self, forKey: .lastSeenAt)
@@ -77,6 +82,7 @@ struct Person: Identifiable, Codable, Equatable {
         try c.encode(name, forKey: .name)
         try c.encode(relationship, forKey: .relationship)
         try c.encode(conversationSummary, forKey: .conversationSummary)
+        try c.encode(conversationHistory, forKey: .conversationHistory)
         try c.encode(photoPaths, forKey: .photoPaths)
         try c.encode(faceEmbedding, forKey: .faceEmbedding)
         try c.encode(createdAt, forKey: .createdAt)
