@@ -11,6 +11,7 @@ struct CameraView: View {
     @StateObject private var camera = CameraController()
     @StateObject private var pipeline = IdentificationPipeline.shared
     @EnvironmentObject private var dataStore: DataStore
+    @State private var showDebugOverlay = false
 
     var body: some View {
         GeometryReader { geo in
@@ -35,6 +36,25 @@ struct CameraView: View {
                     IdentificationCardView(person: person, matchScore: pipeline.lastMatchScore)
                         .transition(.opacity.combined(with: .scale(scale: 0.95)))
                 }
+
+                if showDebugOverlay {
+                    VStack {
+                        Spacer()
+                        DebugOverlayView(pipeline: pipeline)
+                    }
+                }
+
+                Button {
+                    showDebugOverlay.toggle()
+                } label: {
+                    Image(systemName: showDebugOverlay ? "ant.fill" : "ant")
+                        .font(.title2)
+                        .foregroundStyle(showDebugOverlay ? AppTheme.accentPurple : .white)
+                        .padding(10)
+                        .background(Circle().fill(.black.opacity(0.4)))
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                .padding(24)
             }
         }
         .ignoresSafeArea()

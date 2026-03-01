@@ -111,7 +111,7 @@ final class FaceEmbeddingService {
         let faceDetection = VNDetectFaceRectanglesRequest()
         let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
         do { try handler.perform([faceDetection]) } catch { return nil }
-        guard let results = faceDetection.results,
+        guard let results = faceDetection.results as? [VNFaceObservation],
               let mainFace = results.max(by: { a, b in
                   a.boundingBox.width * a.boundingBox.height < b.boundingBox.width * b.boundingBox.height
               }) else { return nil }
@@ -142,7 +142,7 @@ final class FaceEmbeddingService {
         let faceDetection = VNDetectFaceRectanglesRequest()
         let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
         do { try handler.perform([faceDetection]) } catch { return nil }
-        guard let results = faceDetection.results,
+        guard let results = faceDetection.results as? [VNFaceObservation],
               let mainFace = results.max(by: { a, b in
                   a.boundingBox.width * a.boundingBox.height < b.boundingBox.width * b.boundingBox.height
               }) else { return nil }
@@ -227,10 +227,14 @@ final class FaceEmbeddingService {
         return array
     }
 
-    /// Crop CVPixelBuffer to rect (pixel coordinates) and return as CGImage.
+    /// Crop CVPixelBuffer to rect (pixel coordinates, top-left origin). CIImage uses bottom-left origin so we convert.
     private func createCGImage(from pixelBuffer: CVPixelBuffer, cropRect: CGRect) -> CGImage? {
+        let height = CGFloat(CVPixelBufferGetHeight(pixelBuffer))
+        let width = CGFloat(CVPixelBufferGetWidth(pixelBuffer))
+        let ciY = height - cropRect.origin.y - cropRect.height
+        let ciRect = CGRect(x: cropRect.origin.x, y: ciY, width: cropRect.width, height: cropRect.height)
         let ciImage = CIImage(cvPixelBuffer: pixelBuffer)
-        let cropped = ciImage.cropped(to: cropRect)
+        let cropped = ciImage.cropped(to: ciRect)
         let ctx = CIContext(options: [.useSoftwareRenderer: false])
         return ctx.createCGImage(cropped, from: cropped.extent)
     }

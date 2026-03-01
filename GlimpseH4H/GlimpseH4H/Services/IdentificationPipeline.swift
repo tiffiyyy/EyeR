@@ -36,6 +36,15 @@ final class IdentificationPipeline: ObservableObject {
     /// Set when room recognition identifies a room; used for the compact room-name banner.
     @Published var currentRoomName: String?
 
+    // MARK: - Debug (for USB/debug overlay)
+    @Published private(set) var debugFaceCount: Int = 0
+    @Published private(set) var debugIsComparing: Bool = false
+    @Published private(set) var debugLastCosinePercent: Float?
+    @Published private(set) var debugLastSecondBestPercent: Float?
+    @Published private(set) var debugDidMatch: Bool = false
+    /// Threshold as percent for display.
+    var debugMatchThresholdPercent: Int { Int(matchThreshold * 100) }
+
     private var faceDetectionRequest: VNDetectFaceRectanglesRequest?
     private var firstFaceSeenAt: Date?
     private var lastFaceSeenTime: Date?
@@ -105,6 +114,7 @@ final class IdentificationPipeline: ObservableObject {
 
         DispatchQueue.main.async { [weak self] in
             self?.visibleFaceOutlines = boxes
+            self?.debugFaceCount = boxes.count
         }
 
         guard hadFace else { return }
@@ -140,6 +150,16 @@ final class IdentificationPipeline: ObservableObject {
     private func runRecognition(on pixelBuffer: CVPixelBuffer, boxes: [FaceOutline], now: Date, expectedPersonId: UUID?) {
         guard let dataStore = dataStore, !dataStore.people.isEmpty else { return }
 
+        DispatchQueue.main.async { [weak self] in
+            self?.debugIsComparing = true
+        }
+
+        defer {
+            DispatchQueue.main.async { [weak self] in
+                self?.debugIsComparing = false
+            }
+        }
+
         // Choose the largest face as the "main" figure in frame.
         guard let mainFace = boxes.max(by: { a, b in
             let areaA = a.boundingBox.width * a.boundingBox.height
@@ -154,8 +174,11 @@ final class IdentificationPipeline: ObservableObject {
             from: pixelBuffer,
             boundingBox: mainFace.boundingBox
         ) else {
-            // If we previously had someone locked in but can no longer get an embedding,
-            // treat this as losing track and reset to detection mode.
+            DispatchQueue.main.async { [weak self] in
+                self?.debugLastCosinePercent = nil
+                self?.debugLastSecondBestPercent = nil
+                self?.debugDidMatch = false
+            }
             if expectedPersonId != nil {
                 lastIdentifiedPersonId = nil
                 DispatchQueue.main.async { [weak self] in
@@ -185,8 +208,14 @@ final class IdentificationPipeline: ObservableObject {
         }
 
         let marginOk = (secondBestScore < 0) || (bestScore - secondBestScore >= matchMargin)
+        let bestPct = bestScore >= 0 ? Int(round(bestScore * 100)) : nil
+        let secondPct = secondBestScore >= 0 ? Int(round(secondBestScore * 100)) : nil
+        DispatchQueue.main.async { [weak self] in
+            self?.debugLastCosinePercent = bestPct.map { Float($0) }
+            self?.debugLastSecondBestPercent = secondPct.map { Float($0) }
+            self?.debugDidMatch = false
+        }
         guard let matchId = bestMatchId, bestScore >= matchThreshold, marginOk else {
-            // No valid match: if we had an expected person, clear and fall back to detection.
             if expectedPersonId != nil {
                 lastIdentifiedPersonId = nil
                 DispatchQueue.main.async { [weak self] in
@@ -207,6 +236,10 @@ final class IdentificationPipeline: ObservableObject {
                 self?.lastMatchScore = nil
             }
             return
+        }
+
+        DispatchQueue.main.async { [weak self] in
+            self?.debugDidMatch = true
         }
 
         // At this point, we either have:
