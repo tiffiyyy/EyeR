@@ -27,7 +27,11 @@ final class ConversationMemoryCoordinator: ObservableObject {
 
     func stop() {
         if let activePersonId {
-            finalizeConversation(for: activePersonId)
+            if let pending = finishTrackingSession(for: activePersonId) {
+                Task { [weak self] in
+                    await self?.persistConversation(pending)
+                }
+            }
         }
         transcriber.stop()
         activePersonId = nil
@@ -42,7 +46,11 @@ final class ConversationMemoryCoordinator: ObservableObject {
         }
 
         if let oldPersonId = activePersonId {
-            finalizeConversation(for: oldPersonId)
+            if let pending = finishTrackingSession(for: oldPersonId) {
+                Task { [weak self] in
+                    await self?.persistConversation(pending)
+                }
+            }
         }
 
         guard let newPersonId = personId else {
@@ -82,22 +90,39 @@ final class ConversationMemoryCoordinator: ObservableObject {
         }
     }
 
-    private func finalizeConversation(for personId: UUID) {
-        guard let dataStore else { return }
+    private func finishTrackingSession(for personId: UUID) -> PendingConversation? {
         let startedAt = sessionStartedAt ?? Date()
         let endedAt = Date()
         let transcript = transcriber.currentTranscript.trimmingCharacters(in: .whitespacesAndNewlines)
         transcriber.stop()
+        sessionStartedAt = nil
 
-        guard !transcript.isEmpty else { return }
-        let summary = ConversationSummarizer.summarize(transcript: transcript)
-        guard !summary.isEmpty else { return }
-        dataStore.appendConversation(
+        guard !transcript.isEmpty else { return nil }
+        return PendingConversation(
             personId: personId,
-            transcript: transcript,
-            summary: summary,
             startedAt: startedAt,
-            endedAt: endedAt
+            endedAt: endedAt,
+            transcript: transcript
         )
     }
+
+    private func persistConversation(_ pending: PendingConversation) async {
+        guard let dataStore else { return }
+        let summary = await ConversationSummarizer.shared.summarize(transcript: pending.transcript)
+        guard !summary.isEmpty else { return }
+        dataStore.appendConversation(
+            personId: pending.personId,
+            transcript: pending.transcript,
+            summary: summary,
+            startedAt: pending.startedAt,
+            endedAt: pending.endedAt
+        )
+    }
+}
+
+private struct PendingConversation {
+    let personId: UUID
+    let startedAt: Date
+    let endedAt: Date
+    let transcript: String
 }
