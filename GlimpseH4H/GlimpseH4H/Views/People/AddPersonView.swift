@@ -30,34 +30,35 @@ struct AddPersonView: View {
                         .foregroundStyle(.secondary)
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 12) {
-                            ForEach(Array(capturedImages.enumerated()), id: \.offset) { _, img in
-                                Image(uiImage: img)
-                                    .resizable()
-                                    .scaledToFill()
-                                    .frame(width: 80, height: 80)
-                                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                            ForEach(Array(capturedImages.enumerated()), id: \.offset) { index, img in
+                                ZStack(alignment: .topTrailing) {
+                                    Image(uiImage: img)
+                                        .resizable()
+                                        .scaledToFill()
+                                        .frame(width: 80, height: 80)
+                                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                                    Button {
+                                        capturedImages.remove(at: index)
+                                    } label: {
+                                        Image(systemName: "xmark.circle.fill")
+                                            .font(.title3)
+                                            .symbolRenderingMode(.palette)
+                                            .foregroundStyle(.white, .red)
+                                    }
+                                    .padding(4)
+                                }
                             }
                             if capturedImages.count < maxPhotos {
-                                Menu {
-                                    Button {
-                                        showCamera = true
-                                    } label: { Label("Camera", systemImage: "camera.fill") }
-                                    PhotosPicker(
-                                        selection: $selectedLibraryItems,
-                                        maxSelectionCount: maxPhotos - capturedImages.count,
-                                        matching: .images
-                                    ) {
-                                        Label("Photo Library", systemImage: "photo.on.rectangle.angled")
-                                    }
-                                } label: {
-                                    RoundedRectangle(cornerRadius: 8)
-                                        .strokeBorder(style: StrokeStyle(lineWidth: 2, dash: [6]))
-                                        .frame(width: 80, height: 80)
-                                        .overlay {
-                                            Image(systemName: "plus.circle")
-                                                .font(.title2)
-                                                .foregroundStyle(.secondary)
-                                        }
+                                addPhotoButton(
+                                    icon: "camera.fill",
+                                    label: "Camera"
+                                ) { showCamera = true }
+                                PhotosPicker(
+                                    selection: $selectedLibraryItems,
+                                    maxSelectionCount: maxPhotos - capturedImages.count,
+                                    matching: .images
+                                ) {
+                                    addPhotoButtonLabel(icon: "photo.on.rectangle.angled", label: "Photo Library")
                                 }
                                 .buttonStyle(.plain)
                             }
@@ -105,6 +106,24 @@ struct AddPersonView: View {
                 }
             }
         }
+    }
+
+    private func addPhotoButtonLabel(icon: String, label: String) -> some View {
+        RoundedRectangle(cornerRadius: 8)
+            .strokeBorder(style: StrokeStyle(lineWidth: 2, dash: [6]))
+            .frame(width: 80, height: 80)
+            .overlay {
+                Image(systemName: icon)
+                    .font(.title2)
+                    .foregroundStyle(.secondary)
+            }
+    }
+
+    private func addPhotoButton(icon: String, label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            addPhotoButtonLabel(icon: icon, label: label)
+        }
+        .buttonStyle(.plain)
     }
 
     private var canSave: Bool {

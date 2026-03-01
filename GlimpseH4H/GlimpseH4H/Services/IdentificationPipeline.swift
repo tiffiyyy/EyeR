@@ -14,7 +14,7 @@ struct FaceOutline: Identifiable {
     func boundingBox(in size: CGSize) -> CGRect {
         let r = boundingBox
         return CGRect(
-            x: r.minX * size.width,
+            x: size.width - (r.minX + r.width) * size.width,
             y: size.height - (r.minY + r.height) * size.height,
             width: r.width * size.width,
             height: r.height * size.height
