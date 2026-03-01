@@ -8,6 +8,7 @@ import AVFoundation
 
 struct CameraPreview: UIViewRepresentable {
     let session: AVCaptureSession
+    var mirrorWhenBackCamera: Bool = false
 
     func makeUIView(context: Context) -> PreviewView {
         let v = PreviewView()
@@ -15,7 +16,9 @@ struct CameraPreview: UIViewRepresentable {
         return v
     }
 
-    func updateUIView(_ uiView: PreviewView, context: Context) {}
+    func updateUIView(_ uiView: PreviewView, context: Context) {
+        uiView.setMirrored(mirrorWhenBackCamera)
+    }
 }
 
 final class PreviewView: UIView {
@@ -32,4 +35,8 @@ final class PreviewView: UIView {
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    func setMirrored(_ mirrored: Bool) {
+        previewLayer.connection?.isVideoMirrored = mirrored
+    }
 }

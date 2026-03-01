@@ -16,7 +16,7 @@ struct CameraView: View {
     var body: some View {
         GeometryReader { geo in
             ZStack {
-                CameraPreview(session: camera.session)
+                CameraPreview(session: camera.session, mirrorWhenBackCamera: camera.currentPosition == .back)
                     .ignoresSafeArea()
                     .onTapGesture {
                         withAnimation(.easeInOut(duration: 0.2)) {

@@ -4,7 +4,6 @@
 //
 
 import SwiftUI
-import PhotosUI
 
 struct AddPersonView: View {
     @EnvironmentObject private var dataStore: DataStore
@@ -15,7 +14,7 @@ struct AddPersonView: View {
     @State private var relationship = ""
     @State private var capturedImages: [UIImage] = []
     @State private var showCamera = false
-    @State private var selectedLibraryItems: [PhotosPickerItem] = []
+    @State private var showPhotoLibrary = false
     private let minPhotos = 4
     private let maxPhotos = 8
 
@@ -53,13 +52,9 @@ struct AddPersonView: View {
                                     Button {
                                         showCamera = true
                                     } label: { Label("Camera", systemImage: "camera.fill") }
-                                    PhotosPicker(
-                                        selection: $selectedLibraryItems,
-                                        maxSelectionCount: maxPhotos - capturedImages.count,
-                                        matching: .images
-                                    ) {
-                                        Label("Photo Library", systemImage: "photo.on.rectangle.angled")
-                                    }
+                                    Button {
+                                        showPhotoLibrary = true
+                                    } label: { Label("Photo Library", systemImage: "photo.on.rectangle.angled") }
                                 } label: {
                                     RoundedRectangle(cornerRadius: 8)
                                         .strokeBorder(style: StrokeStyle(lineWidth: 2, dash: [6]))
@@ -103,19 +98,16 @@ struct AddPersonView: View {
                     set: { if let img = $0 { capturedImages.append(img); showCamera = false } }
                 ), sourceType: .camera, onDismiss: { showCamera = false })
             }
-            .onChange(of: selectedLibraryItems) { _, newItems in
-                guard !newItems.isEmpty else { return }
-                Task {
-                    let loaded = await PhotoLibraryLoader.loadImages(
-                        from: newItems,
-                        maxCount: maxPhotos,
-                        currentImages: capturedImages
-                    )
-                    await MainActor.run {
-                        capturedImages = loaded
-                        selectedLibraryItems = []
-                    }
-                }
+            .fullScreenCover(isPresented: $showPhotoLibrary) {
+                PhotoLibraryPicker(
+                    maxSelectionCount: maxPhotos - capturedImages.count,
+                    onComplete: { newImages in
+                        let space = maxPhotos - capturedImages.count
+                        capturedImages.append(contentsOf: newImages.prefix(space))
+                        showPhotoLibrary = false
+                    },
+                    onCancel: { showPhotoLibrary = false }
+                )
             }
             .onAppear {
                 if let p = existingPerson {

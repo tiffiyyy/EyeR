@@ -10,7 +10,7 @@ final class CameraController: NSObject, ObservableObject {
     let session = AVCaptureSession()
     private let queue = DispatchQueue(label: "camera.queue")
     private var videoOutput: AVCaptureVideoDataOutput?
-    private var currentPosition: AVCaptureDevice.Position = .back
+    @Published private(set) var currentPosition: AVCaptureDevice.Position = .back
 
     override init() {
         super.init()
@@ -32,9 +32,9 @@ final class CameraController: NSObject, ObservableObject {
     }
 
     func switchCamera() {
-        currentPosition = currentPosition == .back ? .front : .back
+        let next: AVCaptureDevice.Position = currentPosition == .back ? .front : .back
         queue.async { [weak self] in
-            self?.reconfigureInput()
+            self?.reconfigureInput(position: next)
         }
     }
 
@@ -43,7 +43,7 @@ final class CameraController: NSObject, ObservableObject {
             guard let self else { return }
             session.beginConfiguration()
             session.sessionPreset = .high
-            addInputForCurrentPosition()
+            addInput(for: currentPosition)
             let output = AVCaptureVideoDataOutput()
             output.videoSettings = [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA]
             output.alwaysDiscardsLateVideoFrames = true
@@ -59,15 +59,19 @@ final class CameraController: NSObject, ObservableObject {
         }
     }
 
-    private func reconfigureInput() {
+    private func reconfigureInput(position: AVCaptureDevice.Position? = nil) {
+        let newPosition = position ?? currentPosition
         session.beginConfiguration()
         session.inputs.forEach { session.removeInput($0) }
-        addInputForCurrentPosition()
+        addInput(for: newPosition)
         session.commitConfiguration()
+        DispatchQueue.main.async { [weak self] in
+            self?.currentPosition = newPosition
+        }
     }
 
-    private func addInputForCurrentPosition() {
-        guard let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: currentPosition),
+    private func addInput(for position: AVCaptureDevice.Position) {
+        guard let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: position),
               let input = try? AVCaptureDeviceInput(device: device),
               session.canAddInput(input) else { return }
         session.addInput(input)
