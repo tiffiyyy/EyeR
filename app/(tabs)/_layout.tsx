@@ -1,8 +1,8 @@
-import React from 'react';
 import { Tabs } from 'expo-router';
+import React from 'react';
 
-import Colors from '@/constants/Colors';
 import { useColorScheme } from '@/components/useColorScheme';
+import Colors from '@/constants/Colors';
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
@@ -31,10 +31,11 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="memories"
+        name="rooms"
         options={{
-          title: 'Memories',
-          tabBarLabel: 'Memories',
+          headerShown: false,
+          title: 'Rooms',
+          tabBarLabel: 'Rooms',
         }}
       />
     </Tabs>
