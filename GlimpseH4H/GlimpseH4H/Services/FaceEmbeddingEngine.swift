@@ -289,9 +289,10 @@ final class FaceEnrollmentService {
 
     private init() {}
 
-    func enroll(from images: [UIImage]) throws -> (embedding: [Float], keptImages: [Data]) {
+    func enroll(from images: [UIImage]) throws -> (embedding: [Float], keptImages: [Data], faceCrops: [UIImage]) {
         var embeddings: [[Float]] = []
         var keptImages: [Data] = []
+        var faceCrops: [UIImage] = []
 
         for image in images {
             guard let face = FaceCropper.cropLargestFace(from: image) else { continue }
@@ -299,6 +300,7 @@ final class FaceEnrollmentService {
             let embedding = try FaceEmbedder.shared.embedding(from: face)
             embeddings.append(embedding)
             keptImages.append(data)
+            faceCrops.append(UIImage(cgImage: face))
         }
 
         guard !embeddings.isEmpty else {
@@ -319,7 +321,7 @@ final class FaceEnrollmentService {
         for i in 0..<length {
             average[i] /= denom
         }
-        return (FaceMatcher.l2Normalize(average), keptImages)
+        return (FaceMatcher.l2Normalize(average), keptImages, faceCrops)
     }
 }
 
@@ -346,7 +348,7 @@ final class FaceEnrollmentService {
     static let shared = FaceEnrollmentService()
     private init() {}
 
-    func enroll(from images: [UIImage]) throws -> (embedding: [Float], keptImages: [Data]) {
+    func enroll(from images: [UIImage]) throws -> (embedding: [Float], keptImages: [Data], faceCrops: [UIImage]) {
         throw FaceEmbeddingError.tfliteNotLinked
     }
 }

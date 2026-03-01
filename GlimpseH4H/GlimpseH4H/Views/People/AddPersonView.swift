@@ -18,6 +18,7 @@ struct AddPersonView: View {
     @State private var selectedLibraryItems: [PhotosPickerItem] = []
     @State private var isSaving = false
     @State private var saveErrorMessage: String?
+    @State private var enrolledFaceCropsResult: EnrolledFaceCropsResult?
     private let minPhotos = 4
     private let maxPhotos = 8
 
@@ -124,6 +125,16 @@ struct AddPersonView: View {
                     capturedImages = p.photoPaths.compactMap { ImageStore.loadImage(relativePath: $0) }
                 }
             }
+            .sheet(item: $enrolledFaceCropsResult) { result in
+                EnrolledFaceCropsConfirmationView(
+                    faceCrops: result.faceCrops,
+                    personName: result.personName,
+                    onDone: {
+                        enrolledFaceCropsResult = nil
+                        dismiss()
+                    }
+                )
+            }
         }
     }
 
@@ -203,7 +214,10 @@ struct AddPersonView: View {
                         dataStore.addPerson(person)
                     }
                     isSaving = false
-                    dismiss()
+                    enrolledFaceCropsResult = EnrolledFaceCropsResult(
+                        faceCrops: enrollment.faceCrops,
+                        personName: nameTrimmed
+                    )
                 }
             } catch {
                 await MainActor.run {
@@ -211,6 +225,53 @@ struct AddPersonView: View {
                     isSaving = false
                 }
             }
+        }
+    }
+}
+
+// MARK: - Enrolled faces confirmation
+
+private struct EnrolledFaceCropsResult: Identifiable {
+    let id = UUID()
+    let faceCrops: [UIImage]
+    let personName: String
+}
+
+private struct EnrolledFaceCropsConfirmationView: View {
+    let faceCrops: [UIImage]
+    let personName: String
+    let onDone: () -> Void
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 16) {
+                Text("We used these \(faceCrops.count) face\(faceCrops.count == 1 ? "" : "s") for \(personName).")
+                    .font(.subheadline)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 12) {
+                        ForEach(Array(faceCrops.enumerated()), id: \.offset) { _, img in
+                            Image(uiImage: img)
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: 100, height: 100)
+                                .clipShape(RoundedRectangle(cornerRadius: 10))
+                        }
+                    }
+                    .padding()
+                }
+                Text("These are the faces we'll use for recognition.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button("Done", action: onDone)
+                    .buttonStyle(.borderedProminent)
+                    .padding()
+            }
+            .padding(.top, 24)
+            .navigationTitle("Faces recognized")
+            .navigationBarTitleDisplayMode(.inline)
         }
     }
 }

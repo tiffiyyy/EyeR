@@ -31,6 +31,7 @@ struct PeopleTabView: View {
                         }
                     }
                     .padding()
+                    .padding(.bottom, 48)
                 }
             }
             .navigationTitle("People")
