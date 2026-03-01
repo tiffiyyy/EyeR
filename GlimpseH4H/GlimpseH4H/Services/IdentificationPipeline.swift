@@ -44,27 +44,41 @@ final class IdentificationPipeline: ObservableObject {
     private var isRunning = false
     private let queue = DispatchQueue(label: "pipeline.queue")
 
+    /// True when identification is paused (show Resume in UI); false when running (show Pause).
+    @Published private(set) var isPaused: Bool = true
+
     private init() {}
 
     func start(dataStore: DataStore) {
         self.dataStore = dataStore
         isRunning = true
         faceDetectionRequest = VNDetectFaceRectanglesRequest()
+        DispatchQueue.main.async { [weak self] in
+            self?.isPaused = false
+        }
     }
 
     func pause() {
         isRunning = false
         DispatchQueue.main.async { [weak self] in
+            self?.isPaused = true
             self?.visibleFaceOutlines = []
             self?.currentlyIdentifiedPerson = nil
         }
+    }
+
+    /// Resume identification after pause (uses existing dataStore reference).
+    func resume() {
+        guard let dataStore else { return }
+        start(dataStore: dataStore)
     }
 
     func processFrame(_ sampleBuffer: CMSampleBuffer) {
         guard isRunning else { return }
         guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
         let request = faceDetectionRequest ?? VNDetectFaceRectanglesRequest()
-        let handler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, orientation: .leftMirrored, options: [:])
+        // Back camera in portrait: use .right; front would use .leftMirrored
+        let handler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, orientation: .right, options: [:])
         do {
             try handler.perform([request])
             guard let results = request.results else { return }

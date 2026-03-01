@@ -4,7 +4,6 @@
 //
 
 import SwiftUI
-import PhotosUI
 
 struct AddPersonView: View {
     @EnvironmentObject private var dataStore: DataStore
@@ -13,9 +12,9 @@ struct AddPersonView: View {
 
     @State private var name = ""
     @State private var relationship = ""
-    @State private var capturedImages: [UIImage] = []
+    @State private var capturedImages: [IdentifiableImage] = []
     @State private var showCamera = false
-    @State private var selectedLibraryItems: [PhotosPickerItem] = []
+    @State private var showPhotoLibrary = false
     private let minPhotos = 4
     private let maxPhotos = 8
 
@@ -30,25 +29,32 @@ struct AddPersonView: View {
                         .foregroundStyle(.secondary)
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 12) {
-                            ForEach(Array(capturedImages.enumerated()), id: \.offset) { _, img in
-                                Image(uiImage: img)
-                                    .resizable()
-                                    .scaledToFill()
-                                    .frame(width: 80, height: 80)
-                                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                            ForEach(capturedImages) { item in
+                                ZStack(alignment: .topTrailing) {
+                                    Image(uiImage: item.image)
+                                        .resizable()
+                                        .scaledToFill()
+                                        .frame(width: 80, height: 80)
+                                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                                    Button {
+                                        capturedImages.removeAll { $0.id == item.id }
+                                    } label: {
+                                        Image(systemName: "xmark.circle.fill")
+                                            .font(.title3)
+                                            .foregroundStyle(.white)
+                                            .background(Circle().fill(.black.opacity(0.5)))
+                                    }
+                                    .padding(4)
+                                }
                             }
                             if capturedImages.count < maxPhotos {
                                 Menu {
                                     Button {
                                         showCamera = true
                                     } label: { Label("Camera", systemImage: "camera.fill") }
-                                    PhotosPicker(
-                                        selection: $selectedLibraryItems,
-                                        maxSelectionCount: maxPhotos - capturedImages.count,
-                                        matching: .images
-                                    ) {
-                                        Label("Photo Library", systemImage: "photo.on.rectangle.angled")
-                                    }
+                                    Button {
+                                        showPhotoLibrary = true
+                                    } label: { Label("Photo Library", systemImage: "photo.on.rectangle.angled") }
                                 } label: {
                                     RoundedRectangle(cornerRadius: 8)
                                         .strokeBorder(style: StrokeStyle(lineWidth: 2, dash: [6]))
@@ -71,8 +77,13 @@ struct AddPersonView: View {
                     }
                 }
                 Section("Details") {
-                    TextField("Name", text: $name)
-                    TextField("Relationship to you", text: $relationship)
+                    TextField("Name (required)", text: $name)
+                    TextField("Relationship (required)", text: $relationship)
+                    if name.trimmingCharacters(in: .whitespaces).isEmpty || relationship.trimmingCharacters(in: .whitespaces).isEmpty {
+                        Text("Name and Relationship are required.")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                    }
                 }
             }
             .navigationTitle(isEditing ? "Edit Person" : "Add Person")
@@ -89,19 +100,24 @@ struct AddPersonView: View {
             .fullScreenCover(isPresented: $showCamera) {
                 ImagePicker(image: Binding(
                     get: { nil },
-                    set: { if let img = $0 { capturedImages.append(img); showCamera = false } }
+                    set: { if let img = $0 { capturedImages.append(IdentifiableImage(id: UUID(), image: img)); showCamera = false } }
                 ), sourceType: .camera, onDismiss: { showCamera = false })
             }
-            .onChange(of: selectedLibraryItems) { _, newItems in
-                Task {
-                    await loadPhotos(from: newItems)
+            .sheet(isPresented: $showPhotoLibrary) {
+                PhotoLibraryPicker(
+                    isPresented: $showPhotoLibrary,
+                    maxSelectionCount: max(1, maxPhotos - capturedImages.count)
+                ) { images in
+                    for img in images.prefix(maxPhotos - capturedImages.count) {
+                        capturedImages.append(IdentifiableImage(id: UUID(), image: img))
+                    }
                 }
             }
             .onAppear {
                 if let p = existingPerson {
                     name = p.name
                     relationship = p.relationship
-                    capturedImages = p.embeddingData.compactMap { UIImage(data: $0) }
+                    capturedImages = p.embeddingData.compactMap { UIImage(data: $0) }.map { IdentifiableImage(id: UUID(), image: $0) }
                 }
             }
         }
@@ -113,18 +129,8 @@ struct AddPersonView: View {
             && capturedImages.count >= minPhotos
     }
 
-    private func loadPhotos(from items: [PhotosPickerItem]) async {
-        for item in items {
-            if let data = try? await item.loadTransferable(type: Data.self),
-               let img = UIImage(data: data), capturedImages.count < maxPhotos {
-                await MainActor.run { capturedImages.append(img) }
-            }
-        }
-        await MainActor.run { selectedLibraryItems = [] }
-    }
-
     private func saveAndDismiss() {
-        let data = capturedImages.prefix(maxPhotos).compactMap { $0.jpegData(compressionQuality: 0.8) }
+        let data = capturedImages.prefix(maxPhotos).compactMap { $0.image.jpegData(compressionQuality: 0.8) }
         if let existing = existingPerson {
             var updated = existing
             updated.name = name.trimmingCharacters(in: .whitespaces)

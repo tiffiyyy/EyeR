@@ -13,6 +13,8 @@ enum AppTheme {
     )
     static let cardBackground = Color.white
     static let accentPurple = Color(red: 0.55, green: 0.45, blue: 0.75)
+    /// Pause/Resume button color (hex A0A1EA)
+    static let pauseButtonPurple = Color(red: 0xA0/255, green: 0xA1/255, blue: 0xEA/255)
     static let faceOutlineColor = Color.white
     static let cardCornerRadius: CGFloat = 16
     static let navIconSize: CGFloat = 24

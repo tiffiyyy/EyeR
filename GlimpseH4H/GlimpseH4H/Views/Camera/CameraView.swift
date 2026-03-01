@@ -9,7 +9,7 @@ import AVFoundation
 struct CameraView: View {
     @Binding var isFullScreen: Bool
     @StateObject private var camera = CameraController()
-    @StateObject private var pipeline = IdentificationPipeline.shared
+    @ObservedObject private var pipeline = IdentificationPipeline.shared
     @EnvironmentObject private var dataStore: DataStore
 
     var body: some View {

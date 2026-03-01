@@ -35,7 +35,7 @@ final class CameraController: NSObject, ObservableObject {
             guard let self else { return }
             session.beginConfiguration()
             session.sessionPreset = .high
-            guard let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .front),
+            guard let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back),
                   let input = try? AVCaptureDeviceInput(device: device) else {
                 session.commitConfiguration()
                 return
