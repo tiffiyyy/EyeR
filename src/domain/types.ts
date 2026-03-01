@@ -22,17 +22,44 @@ export type PersonWithEmbeddings = {
   embeddings: PersonEmbedding[];
 };
 
-export type MemoryRecord = {
+export type Room = {
   id: string;
+  name: string;
+  thumbnailUri?: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type RoomEmbedding = {
+  id: string;
+  roomId: string;
+  vector: EmbeddingVector;
+  sourcePhotoUri?: string | null;
+  createdAt: string;
+};
+
+export type RoomWithEmbeddings = {
+  room: Room;
+  embeddings: RoomEmbedding[];
+};
+
+export type InteractionRecord = {
+  id: string;
+  personId: string;
   timestamp: string;
-  topics: string[];
-  summary?: string | null;
+  transcript: string;
 };
 
 export type KnownEmbedding = {
   personId: string;
   personName: string;
   relationship: string;
+  embedding: EmbeddingVector;
+};
+
+export type KnownRoomEmbedding = {
+  roomId: string;
+  roomName: string;
   embedding: EmbeddingVector;
 };
 

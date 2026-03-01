@@ -3,9 +3,12 @@ import { CameraView, useCameraPermissions } from "expo-camera";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
-import { peopleRepository } from "@/src/data/repositories";
+import { Audio } from "expo-av";
+
+import { interactionsRepository, peopleRepository } from "@/src/data/repositories";
 import { type KnownEmbedding } from "@/src/domain/types";
 import { recognitionPipeline } from "@/src/ml";
+import { convertSpeechToText } from "@/src/ml/speechToText";
 
 import { useTabBarVisibility } from "./TabBarVisibilityContext";
 
@@ -61,15 +64,27 @@ function CornerFrame({
 
 export default function CameraModeScreen() {
   const [permission, requestPermission] = useCameraPermissions();
+  const [audioPermission, requestAudioPermission] = Audio.usePermissions();
   const [knownEmbeddings, setKnownEmbeddings] = useState<KnownEmbedding[]>([]);
   const [overlayMatches, setOverlayMatches] = useState<OverlayMatch[]>([]);
   const [sustainedFrames, setSustainedFrames] = useState<SustainedFace[]>([]);
   const [layoutSize, setLayoutSize] = useState<{ width: number; height: number } | null>(null);
   const [isRunning, setIsRunning] = useState(true);
+  const [recording, setRecording] = useState<Audio.Recording | null>(null);
+
   const [showUI, setShowUI] = useState(false);
   const lockRef = useRef(false);
+  const recordingRef = useRef<Audio.Recording | null>(null);
+  const unseenCountRef = useRef(0);
+  const activePersonIdRef = useRef<string | null>(null);
   const firstSeenAtRef = useRef<Record<string, number>>({});
   const { setHideTabBar } = useTabBarVisibility();
+
+  // #region agent log
+  useEffect(() => {
+    fetch('http://127.0.0.1:7919/ingest/f09e510d-9d5b-410d-80b9-6a3747b27a58', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'a3f49c' }, body: JSON.stringify({ sessionId: 'a3f49c', location: 'camera.tsx:mount', message: 'Camera screen mounted', data: {}, timestamp: Date.now(), hypothesisId: 'H4' }) }).catch(() => { });
+  }, []);
+  // #endregion
 
   const refreshKnownEmbeddings = useCallback(async () => {
     const records = await peopleRepository.listKnownEmbeddings();
@@ -134,6 +149,56 @@ export default function CameraModeScreen() {
           sustained.map((entry) => ({ faceId: entry.faceId, bounds: entry.bounds }))
         );
         setOverlayMatches(visibleMatches);
+
+        if (visibleMatches.length > 0) {
+          unseenCountRef.current = 0;
+          const primaryPersonId = predictions.find((p) => !p.match.isUnknown && p.match.personId)?.match.personId;
+
+          if (primaryPersonId && !recordingRef.current && audioPermission?.granted) {
+            activePersonIdRef.current = primaryPersonId;
+            try {
+              await Audio.setAudioModeAsync({
+                allowsRecordingIOS: true,
+                playsInSilentModeIOS: true,
+              });
+              const { recording: newRecording } = await Audio.Recording.createAsync(
+                Audio.RecordingOptionsPresets.HIGH_QUALITY
+              );
+              recordingRef.current = newRecording;
+              setRecording(newRecording);
+            } catch (err) {
+              console.error("Failed to start recording", err);
+            }
+          }
+        } else {
+          unseenCountRef.current += 1;
+          if (unseenCountRef.current > 2 && recordingRef.current) {
+            const currentRecording = recordingRef.current;
+            recordingRef.current = null;
+            setRecording(null);
+
+            try {
+              await currentRecording.stopAndUnloadAsync();
+              const uri = currentRecording.getURI();
+              if (uri && activePersonIdRef.current) {
+                const personId = activePersonIdRef.current;
+                activePersonIdRef.current = null;
+
+                convertSpeechToText(uri).then(async (transcript) => {
+                  if (transcript.trim()) {
+                    await interactionsRepository.create({
+                      personId: personId,
+                      transcript: transcript,
+                    });
+                    console.log(`Saved interaction for ${personId}: ${transcript}`);
+                  }
+                }).catch(err => console.error("STT error", err));
+              }
+            } catch (err) {
+              console.error("Failed to stop recording", err);
+            }
+          }
+        }
       } catch (error) {
         console.error("Recognition loop failed", error);
       } finally {
@@ -144,30 +209,48 @@ export default function CameraModeScreen() {
     return () => clearInterval(timer);
   }, [isRunning, knownEmbeddings, permission?.granted]);
 
-  if (!permission) {
+  if (!permission || !audioPermission) {
+    // #region agent log
+    fetch('http://127.0.0.1:7919/ingest/f09e510d-9d5b-410d-80b9-6a3747b27a58', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'a3f49c' }, body: JSON.stringify({ sessionId: 'a3f49c', location: 'camera.tsx:branch', message: 'Rendering branch', data: { branch: 'checking', permissionNull: true }, timestamp: Date.now(), hypothesisId: 'H2' }) }).catch(() => { });
+    // #endregion
     return (
       <View style={styles.centered}>
-        <Text style={styles.bodyText}>Checking camera permissions...</Text>
+        <Text style={styles.bodyText}>Checking permissions...</Text>
       </View>
     );
   }
 
-  if (!permission.granted) {
+  if (!permission.granted || !audioPermission.granted) {
+    // #region agent log
+    fetch('http://127.0.0.1:7919/ingest/f09e510d-9d5b-410d-80b9-6a3747b27a58', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'a3f49c' }, body: JSON.stringify({ sessionId: 'a3f49c', location: 'camera.tsx:branch', message: 'Rendering branch', data: { branch: 'denied', granted: permission.granted }, timestamp: Date.now(), hypothesisId: 'H2' }) }).catch(() => { });
+    // #endregion
     return (
       <View style={styles.centered}>
-        <Text style={styles.titleText}>Camera permission required</Text>
+        <Text style={styles.titleText}>Camera & Audio permission required</Text>
         <Text style={styles.bodyText}>
-          EyeRemember processes camera data locally on-device and does not upload images.
+          EyeRemember processes camera and audio data locally or uses secure APIs and does not upload raw images.
         </Text>
-        <Pressable onPress={requestPermission} style={styles.primaryButton}>
-          <Text style={styles.primaryButtonText}>Allow Camera</Text>
+        <Pressable onPress={() => { requestPermission(); requestAudioPermission(); }} style={styles.primaryButton}>
+          <Text style={styles.primaryButtonText}>Allow Permissions</Text>
         </Pressable>
       </View>
     );
   }
 
+  // #region agent log
+  fetch('http://127.0.0.1:7919/ingest/f09e510d-9d5b-410d-80b9-6a3747b27a58', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'a3f49c' }, body: JSON.stringify({ sessionId: 'a3f49c', location: 'camera.tsx:branch', message: 'Rendering branch', data: { branch: 'camera', granted: permission.granted }, timestamp: Date.now(), hypothesisId: 'H2' }) }).catch(() => { });
+  // #endregion
   return (
-    <View style={styles.container} onLayout={(e) => setLayoutSize({ width: e.nativeEvent.layout.width, height: e.nativeEvent.layout.height })}>
+    <View
+      style={styles.container}
+      onLayout={(e) => {
+        const { width, height } = e.nativeEvent.layout;
+        // #region agent log
+        fetch('http://127.0.0.1:7919/ingest/f09e510d-9d5b-410d-80b9-6a3747b27a58', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'a3f49c' }, body: JSON.stringify({ sessionId: 'a3f49c', location: 'camera.tsx:onLayout', message: 'Container layout', data: { width, height }, timestamp: Date.now(), hypothesisId: 'H1' }) }).catch(() => { });
+        // #endregion
+        setLayoutSize({ width, height });
+      }}
+    >
       <CameraView style={StyleSheet.absoluteFill} facing="back" />
       {layoutSize &&
         sustainedFrames.length > 0 && (
@@ -321,5 +404,27 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 18,
     fontWeight: "700",
+  },
+  recordingIndicator: {
+    position: "absolute",
+    top: 60,
+    right: 20,
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(0,0,0,0.6)",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    gap: 8,
+  },
+  recordingDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: "#ef4444",
+  },
+  recordingText: {
+    color: "#fff",
+    fontWeight: "600",
   },
 });

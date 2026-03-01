@@ -1,8 +1,9 @@
-import React from 'react';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { Tabs } from 'expo-router';
+import React from 'react';
 
-import Colors from '@/constants/Colors';
 import { useColorScheme } from '@/components/useColorScheme';
+import Colors from '@/constants/Colors';
 
 import { TabBarVisibilityProvider, useTabBarVisibility } from './TabBarVisibilityContext';
 
@@ -26,6 +27,7 @@ function TabLayoutContent() {
           title: 'Camera',
           tabBarLabel: 'Camera',
           headerShown: false,
+          tabBarIcon: ({ color, size }) => <Ionicons name="camera" size={size} color={color} />,
         }}
       />
       <Tabs.Screen
@@ -34,13 +36,15 @@ function TabLayoutContent() {
           headerShown: false,
           title: 'People',
           tabBarLabel: 'People',
+          tabBarIcon: ({ color, size }) => <Ionicons name="people" size={size} color={color} />,
         }}
       />
       <Tabs.Screen
-        name="memories"
+        name="rooms"
         options={{
-          title: 'Memories',
-          tabBarLabel: 'Memories',
+          title: 'Rooms',
+          tabBarLabel: 'Rooms',
+          tabBarIcon: ({ color, size }) => <Ionicons name="book" size={size} color={color} />,
         }}
       />
     </Tabs>
