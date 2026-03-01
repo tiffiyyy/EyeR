@@ -73,12 +73,12 @@ final class IdentificationPipeline: ObservableObject {
         start(dataStore: dataStore)
     }
 
-    func processFrame(_ sampleBuffer: CMSampleBuffer) {
+    func processFrame(_ sampleBuffer: CMSampleBuffer, cameraPosition: AVCaptureDevice.Position) {
         guard isRunning else { return }
         guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
         let request = faceDetectionRequest ?? VNDetectFaceRectanglesRequest()
-        // Back camera in portrait: use .right; front would use .leftMirrored
-        let handler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, orientation: .right, options: [:])
+        let orientation: CGImagePropertyOrientation = cameraPosition == .front ? .leftMirrored : .right
+        let handler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, orientation: orientation, options: [:])
         do {
             try handler.perform([request])
             guard let results = request.results else { return }

@@ -13,29 +13,28 @@ struct CameraView: View {
     @EnvironmentObject private var dataStore: DataStore
 
     var body: some View {
-        GeometryReader { geo in
-            ZStack {
-                CameraPreview(session: camera.session)
-                    .ignoresSafeArea()
-                    .onTapGesture {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            isFullScreen.toggle()
-                        }
-                    }
-
-                ForEach(pipeline.visibleFaceOutlines) { outline in
-                    FaceOutlineView(rect: outline.boundingBox(in: geo.size))
-                }
-
-                if let roomName = pipeline.currentRoomName {
-                    RoomNameBanner(roomName: roomName)
-                }
-                if let identified = pipeline.currentlyIdentifiedPerson,
-                   let person = dataStore.people.first(where: { $0.id == identified.personId }) {
-                    IdentificationCardView(person: person)
-                        .transition(.opacity.combined(with: .scale(scale: 0.95)))
+        ZStack {
+            CameraPreview(
+                session: camera.session,
+                faceRects: pipeline.visibleFaceOutlines.map(\.boundingBox)
+            )
+            .ignoresSafeArea()
+            .onTapGesture {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    isFullScreen.toggle()
                 }
             }
+
+            if let roomName = pipeline.currentRoomName {
+                RoomNameBanner(roomName: roomName)
+            }
+            if let identified = pipeline.currentlyIdentifiedPerson,
+               let person = dataStore.people.first(where: { $0.id == identified.personId }) {
+                IdentificationCardView(person: person)
+                    .transition(.opacity.combined(with: .scale(scale: 0.95)))
+            }
+
+            FlipCameraButton(onTap: { camera.switchCamera() })
         }
         .ignoresSafeArea()
         .onAppear {
@@ -69,13 +68,25 @@ private struct RoomNameBanner: View {
     }
 }
 
-private struct FaceOutlineView: View {
-    let rect: CGRect
+private struct FlipCameraButton: View {
+    var onTap: () -> Void
 
     var body: some View {
-        RoundedRectangle(cornerRadius: 8)
-            .stroke(AppTheme.faceOutlineColor, lineWidth: 3)
-            .frame(width: rect.width, height: rect.height)
-            .position(x: rect.midX, y: rect.midY)
+        VStack {
+            HStack {
+                Spacer()
+                Button(action: onTap) {
+                    Image(systemName: "camera.rotate.fill")
+                        .font(.system(size: 24))
+                        .foregroundStyle(.white)
+                        .padding(12)
+                        .background(Circle().fill(.black.opacity(0.4)))
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 8)
+                .padding(.trailing, 20)
+            }
+            Spacer()
+        }
     }
 }

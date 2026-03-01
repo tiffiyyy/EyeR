@@ -29,6 +29,7 @@ struct MainTabView: View {
                 .tag(Tab.settings)
         }
         .tabViewStyle(.page(indexDisplayMode: .never))
+        .ignoresSafeArea(.container, edges: .top)
         .overlay(alignment: .bottom) {
             if !cameraFullScreen {
                 BottomNavBar(selectedTab: $selectedTab, pipeline: pipeline)

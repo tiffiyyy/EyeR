@@ -11,6 +11,9 @@ final class CameraController: NSObject, ObservableObject {
     private let queue = DispatchQueue(label: "camera.queue")
     private var videoOutput: AVCaptureVideoDataOutput?
 
+    /// Current camera position; used for flip button and face detection orientation.
+    @Published private(set) var cameraPosition: AVCaptureDevice.Position = .back
+
     override init() {
         super.init()
     }
@@ -30,25 +33,33 @@ final class CameraController: NSObject, ObservableObject {
         }
     }
 
+    /// Switch between front and back camera.
+    func switchCamera() {
+        cameraPosition = cameraPosition == .back ? .front : .back
+        configureAndStart()
+    }
+
     private func configureAndStart() {
         queue.async { [weak self] in
             guard let self else { return }
             session.beginConfiguration()
             session.sessionPreset = .high
-            guard let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back),
+            if let current = session.inputs.first { session.removeInput(current) }
+            guard let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: cameraPosition),
                   let input = try? AVCaptureDeviceInput(device: device) else {
                 session.commitConfiguration()
                 return
             }
             if session.canAddInput(input) { session.addInput(input) }
-
-            let output = AVCaptureVideoDataOutput()
-            output.videoSettings = [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA]
-            output.alwaysDiscardsLateVideoFrames = true
-            output.setSampleBufferDelegate(self, queue: queue)
-            if session.canAddOutput(output) {
-                session.addOutput(output)
-                videoOutput = output
+            if videoOutput == nil {
+                let output = AVCaptureVideoDataOutput()
+                output.videoSettings = [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA]
+                output.alwaysDiscardsLateVideoFrames = true
+                output.setSampleBufferDelegate(self, queue: queue)
+                if session.canAddOutput(output) {
+                    session.addOutput(output)
+                    videoOutput = output
+                }
             }
             session.commitConfiguration()
             DispatchQueue.main.async {
@@ -60,6 +71,6 @@ final class CameraController: NSObject, ObservableObject {
 
 extension CameraController: AVCaptureVideoDataOutputSampleBufferDelegate {
     func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
-        IdentificationPipeline.shared.processFrame(sampleBuffer)
+        IdentificationPipeline.shared.processFrame(sampleBuffer, cameraPosition: cameraPosition)
     }
 }
