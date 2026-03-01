@@ -7,14 +7,30 @@ import SwiftUI
 
 struct IdentificationCardView: View {
     let person: Person
+    /// When present, shows "Face match" and optional confidence (e.g. 0.85 → "85%")
+    var matchScore: Float?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(person.name)
-                .font(.headline)
+            HStack {
+                Text(person.name)
+                    .font(.headline)
+                Spacer()
+                if matchScore != nil {
+                    Text(scoreLabel)
+                        .font(.caption)
+                        .fontWeight(.medium)
+                        .foregroundStyle(.secondary)
+                }
+            }
             Text(person.relationship)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
+            if matchScore != nil {
+                Label("Face match", systemImage: "face.smiling")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
             if !person.conversationSummary.isEmpty {
                 Text(person.conversationSummary)
                     .font(.caption)
@@ -32,5 +48,11 @@ struct IdentificationCardView: View {
         .padding(.horizontal, 20)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .padding(.top, 60)
+    }
+
+    private var scoreLabel: String {
+        guard let s = matchScore else { return "" }
+        let pct = Int(round(s * 100))
+        return "\(pct)% match"
     }
 }

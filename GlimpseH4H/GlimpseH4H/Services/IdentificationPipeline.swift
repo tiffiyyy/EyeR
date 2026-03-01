@@ -31,6 +31,8 @@ final class IdentificationPipeline: ObservableObject {
 
     @Published private(set) var visibleFaceOutlines: [FaceOutline] = []
     @Published private(set) var currentlyIdentifiedPerson: IdentifiedPerson?
+    /// Cosine similarity (0–1) of the last successful face match; nil when no one is identified.
+    @Published private(set) var lastMatchScore: Float?
     /// Set when room recognition identifies a room; used for the compact room-name banner.
     @Published var currentRoomName: String?
 
@@ -94,6 +96,7 @@ final class IdentificationPipeline: ObservableObject {
                 lastFaceSeenTime = nil
                 DispatchQueue.main.async { [weak self] in
                     self?.currentlyIdentifiedPerson = nil
+                    self?.lastMatchScore = nil
                 }
             }
         }
@@ -181,6 +184,7 @@ final class IdentificationPipeline: ObservableObject {
                 lastIdentifiedPersonId = nil
                 DispatchQueue.main.async { [weak self] in
                     self?.currentlyIdentifiedPerson = nil
+                    self?.lastMatchScore = nil
                 }
             }
             return
@@ -193,6 +197,7 @@ final class IdentificationPipeline: ObservableObject {
             lastIdentifiedPersonId = nil
             DispatchQueue.main.async { [weak self] in
                 self?.currentlyIdentifiedPerson = nil
+                self?.lastMatchScore = nil
             }
             return
         }

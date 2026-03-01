@@ -98,6 +98,11 @@ private struct PersonListCard: View {
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                     }
+                    if !person.faceEmbeddings.isEmpty {
+                        Text("\(person.faceEmbeddings.count) face embedding\(person.faceEmbeddings.count == 1 ? "" : "s") • camera can recognize")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
                 }
                 Spacer()
                 Menu {

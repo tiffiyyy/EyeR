@@ -16,6 +16,8 @@ struct AddPersonView: View {
     @State private var capturedImages: [UIImage] = []
     @State private var showCamera = false
     @State private var selectedLibraryItems: [PhotosPickerItem] = []
+    @State private var saveResultMessage: String?
+    @State private var showSaveResultAlert = false
     private let minPhotos = 4
     private let maxPhotos = 8
 
@@ -105,6 +107,15 @@ struct AddPersonView: View {
                     capturedImages = p.embeddingData.compactMap { UIImage(data: $0) }
                 }
             }
+            .alert("Saved", isPresented: $showSaveResultAlert) {
+                Button("OK") {
+                    dismiss()
+                }
+            } message: {
+                if let msg = saveResultMessage {
+                    Text(msg)
+                }
+            }
         }
     }
 
@@ -148,16 +159,17 @@ struct AddPersonView: View {
         let embeddings: [[Float]] = images.compactMap {
             FaceEmbeddingService.shared.embedding(from: $0)
         }
+        let nameTrimmed = name.trimmingCharacters(in: .whitespaces)
         if let existing = existingPerson {
             var updated = existing
-            updated.name = name.trimmingCharacters(in: .whitespaces)
+            updated.name = nameTrimmed
             updated.relationship = relationship.trimmingCharacters(in: .whitespaces)
             updated.embeddingData = photoData
             updated.faceEmbeddings = embeddings
             dataStore.updatePerson(updated)
         } else {
             let person = Person(
-                name: name.trimmingCharacters(in: .whitespaces),
+                name: nameTrimmed,
                 relationship: relationship.trimmingCharacters(in: .whitespaces),
                 conversationSummary: "",
                 embeddingData: photoData,
@@ -165,6 +177,15 @@ struct AddPersonView: View {
             )
             dataStore.addPerson(person)
         }
-        dismiss()
+        if embeddings.isEmpty {
+            if FaceEmbeddingService.shared.isModelAvailable {
+                saveResultMessage = "Saved, but no face embeddings were created. Make sure each photo clearly shows one face."
+            } else {
+                saveResultMessage = "Saved. Face recognition is unavailable—add FaceEmbedding.mlmodel to the app target for recognition."
+            }
+        } else {
+            saveResultMessage = "Saved with \(embeddings.count) face embedding\(embeddings.count == 1 ? "" : "s"). \(nameTrimmed) can be recognized by the camera."
+        }
+        showSaveResultAlert = true
     }
 }

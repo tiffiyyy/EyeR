@@ -30,6 +30,9 @@ final class FaceEmbeddingService {
         }
     }
 
+    /// Whether a face-embedding model is loaded and recognition is available.
+    var isModelAvailable: Bool { vnModel != nil }
+
     /// Returns an embedding vector for the primary face in a UIImage, if possible.
     /// Uses Vision to detect the largest face, then runs the CoreML model on that region.
     func embedding(from image: UIImage) -> [Float]? {

@@ -32,7 +32,7 @@ struct CameraView: View {
                 }
                 if let identified = pipeline.currentlyIdentifiedPerson,
                    let person = dataStore.people.first(where: { $0.id == identified.personId }) {
-                    IdentificationCardView(person: person)
+                    IdentificationCardView(person: person, matchScore: pipeline.lastMatchScore)
                         .transition(.opacity.combined(with: .scale(scale: 0.95)))
                 }
             }
