@@ -45,7 +45,9 @@ final class IdentificationPipeline: ObservableObject {
     /// How often to re-run recognition for a locked-in person.
     private let recognitionInterval: TimeInterval = 5.0
     /// Minimum similarity score (cosine) for a match to be considered valid.
-    private let matchThreshold: Float = 0.7
+    private let matchThreshold: Float = 0.82
+    /// Best match must be at least this much higher than second-best to avoid ambiguous wrong matches.
+    private let matchMargin: Float = 0.06
     private var lastRecognitionTime: Date?
     private var dataStore: DataStore?
     private var isRunning = false
@@ -166,19 +168,24 @@ final class IdentificationPipeline: ObservableObject {
         // Compare against all stored embeddings for all people.
         var bestMatchId: UUID?
         var bestScore: Float = -1
+        var secondBestScore: Float = -1
 
         for person in dataStore.people {
             for embedding in person.faceEmbeddings {
                 guard embedding.count == currentEmbedding.count, !embedding.isEmpty else { continue }
                 let score = cosineSimilarity(currentEmbedding, embedding)
                 if score > bestScore {
+                    secondBestScore = bestScore
                     bestScore = score
                     bestMatchId = person.id
+                } else if score > secondBestScore {
+                    secondBestScore = score
                 }
             }
         }
 
-        guard let matchId = bestMatchId, bestScore >= matchThreshold else {
+        let marginOk = (secondBestScore < 0) || (bestScore - secondBestScore >= matchMargin)
+        guard let matchId = bestMatchId, bestScore >= matchThreshold, marginOk else {
             // No valid match: if we had an expected person, clear and fall back to detection.
             if expectedPersonId != nil {
                 lastIdentifiedPersonId = nil
@@ -206,8 +213,10 @@ final class IdentificationPipeline: ObservableObject {
         // - An initial recognition (expectedPersonId == nil), or
         // - A re-validation that confirms the same person is still present.
         lastIdentifiedPersonId = matchId
+        let scoreToPublish = bestScore
         DispatchQueue.main.async { [weak self] in
             self?.currentlyIdentifiedPerson = IdentifiedPerson(personId: matchId)
+            self?.lastMatchScore = scoreToPublish
             self?.dataStore?.updateLastSeen(personId: matchId, at: now)
         }
     }
