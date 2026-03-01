@@ -71,6 +71,12 @@ export default function CameraModeScreen() {
   const firstSeenAtRef = useRef<Record<string, number>>({});
   const { setHideTabBar } = useTabBarVisibility();
 
+  // #region agent log
+  useEffect(() => {
+    fetch('http://127.0.0.1:7919/ingest/f09e510d-9d5b-410d-80b9-6a3747b27a58',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a3f49c'},body:JSON.stringify({sessionId:'a3f49c',location:'camera.tsx:mount',message:'Camera screen mounted',data:{},timestamp:Date.now(),hypothesisId:'H4'})}).catch(()=>{});
+  }, []);
+  // #endregion
+
   const refreshKnownEmbeddings = useCallback(async () => {
     const records = await peopleRepository.listKnownEmbeddings();
     setKnownEmbeddings(records);
@@ -145,6 +151,9 @@ export default function CameraModeScreen() {
   }, [isRunning, knownEmbeddings, permission?.granted]);
 
   if (!permission) {
+    // #region agent log
+    fetch('http://127.0.0.1:7919/ingest/f09e510d-9d5b-410d-80b9-6a3747b27a58',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a3f49c'},body:JSON.stringify({sessionId:'a3f49c',location:'camera.tsx:branch',message:'Rendering branch',data:{branch:'checking',permissionNull:true},timestamp:Date.now(),hypothesisId:'H2'})}).catch(()=>{});
+    // #endregion
     return (
       <View style={styles.centered}>
         <Text style={styles.bodyText}>Checking camera permissions...</Text>
@@ -153,6 +162,9 @@ export default function CameraModeScreen() {
   }
 
   if (!permission.granted) {
+    // #region agent log
+    fetch('http://127.0.0.1:7919/ingest/f09e510d-9d5b-410d-80b9-6a3747b27a58',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a3f49c'},body:JSON.stringify({sessionId:'a3f49c',location:'camera.tsx:branch',message:'Rendering branch',data:{branch:'denied',granted:permission.granted},timestamp:Date.now(),hypothesisId:'H2'})}).catch(()=>{});
+    // #endregion
     return (
       <View style={styles.centered}>
         <Text style={styles.titleText}>Camera permission required</Text>
@@ -166,8 +178,20 @@ export default function CameraModeScreen() {
     );
   }
 
+  // #region agent log
+  fetch('http://127.0.0.1:7919/ingest/f09e510d-9d5b-410d-80b9-6a3747b27a58',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a3f49c'},body:JSON.stringify({sessionId:'a3f49c',location:'camera.tsx:branch',message:'Rendering branch',data:{branch:'camera',granted:permission.granted},timestamp:Date.now(),hypothesisId:'H2'})}).catch(()=>{});
+  // #endregion
   return (
-    <View style={styles.container} onLayout={(e) => setLayoutSize({ width: e.nativeEvent.layout.width, height: e.nativeEvent.layout.height })}>
+    <View
+      style={styles.container}
+      onLayout={(e) => {
+        const { width, height } = e.nativeEvent.layout;
+        // #region agent log
+        fetch('http://127.0.0.1:7919/ingest/f09e510d-9d5b-410d-80b9-6a3747b27a58',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a3f49c'},body:JSON.stringify({sessionId:'a3f49c',location:'camera.tsx:onLayout',message:'Container layout',data:{width,height},timestamp:Date.now(),hypothesisId:'H1'})}).catch(()=>{});
+        // #endregion
+        setLayoutSize({ width, height });
+      }}
+    >
       <CameraView style={StyleSheet.absoluteFill} facing="back" />
       {layoutSize &&
         sustainedFrames.length > 0 && (
